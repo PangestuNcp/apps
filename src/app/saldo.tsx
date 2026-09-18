@@ -7,6 +7,7 @@ import {
   Pressable,
   ScrollView,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import db from '../database/database';
 
@@ -64,75 +65,127 @@ export default function SaldoScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
-
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* HEADER */}
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()}>
+          <Pressable
+            onPress={() => router.back()}
+            hitSlop={10}
+          >
             <Text style={styles.back}>‹</Text>
           </Pressable>
 
           <View>
             <Text style={styles.title}>Saldo</Text>
             <Text style={styles.subtitle}>
-              Posisi saldo saat ini
+              Total aset saat ini
             </Text>
           </View>
         </View>
 
-        <View style={styles.totalCard}>
-          <Text style={styles.totalLabel}>TOTAL ASET</Text>
+        {/* TOTAL ASET */}
+        <View style={styles.totalSection}>
           <Text style={styles.totalValue}>
             {rupiah(totalAset)}
           </Text>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.accountName}>Cash</Text>
-          <Text style={styles.accountValue}>
-            {rupiah(saldo.cash)}
-          </Text>
+        {/* SALDO UTAMA */}
+        <View style={styles.accountList}>
+          <View style={styles.accountRow}>
+            <View style={styles.accountLeft}>
+              <Ionicons
+                name="cash-outline"
+                size={20}
+                color="#4E8A67"
+              />
+
+              <Text style={styles.accountName}>
+                Cash
+              </Text>
+            </View>
+
+            <Text style={styles.accountValue}>
+              {rupiah(saldo.cash)}
+            </Text>
+          </View>
+
+          <View style={styles.accountRow}>
+            <View style={styles.accountLeft}>
+              <Ionicons
+                name="wallet-outline"
+                size={20}
+                color="#5B8A72"
+              />
+
+              <Text style={styles.accountName}>
+                Dompet Grab
+              </Text>
+            </View>
+
+            <Text
+              style={[
+                styles.accountValue,
+                saldo.dompet_grab < 0 &&
+                  styles.accountValueNegative,
+              ]}
+            >
+              {rupiah(saldo.dompet_grab)}
+            </Text>
+          </View>
+
+          <View style={styles.accountRow}>
+            <View style={styles.accountLeft}>
+              <Text style={styles.ovoLogo}>
+                OVO
+              </Text>
+
+              <Text style={styles.accountName}>
+                OVO
+              </Text>
+            </View>
+
+            <Text style={styles.accountValue}>
+              {rupiah(saldo.ovo)}
+            </Text>
+          </View>
+
+          <View style={styles.accountRow}>
+            <View style={styles.accountLeft}>
+              <Ionicons
+                name="business-outline"
+                size={20}
+                color="#5C7EA8"
+              />
+
+              <Text style={styles.accountName}>
+                SeaBank
+              </Text>
+            </View>
+
+            <Text style={styles.accountValue}>
+              {rupiah(saldo.seabank)}
+            </Text>
+          </View>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.accountName}>Dompet Grab</Text>
-          <Text
-            style={[
-              styles.accountValue,
-              saldo.dompet_grab < 0 && styles.accountValueNegative,
-            ]}
-          >
-            {rupiah(saldo.dompet_grab)}
-          </Text>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.accountName}>OVO</Text>
-          <Text style={styles.accountValue}>
-            {rupiah(saldo.ovo)}
-          </Text>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.accountName}>SeaBank</Text>
-          <Text style={styles.accountValue}>
-            {rupiah(saldo.seabank)}
-          </Text>
-        </View>
-
-        <View style={styles.creditCard}>
-          <Text style={styles.accountName}>
+        {/* KREDIT GRAB */}
+        <View style={styles.creditSection}>
+          <Text style={styles.creditName}>
             Kredit Grab
           </Text>
 
-          <Text style={styles.accountValue}>
+          <Text style={styles.creditValue}>
             {rupiah(saldo.kredit_grab)}
           </Text>
 
           <Text style={styles.creditInfo}>
-            Saldo kredit / internal
+            Tidak termasuk dalam total aset
           </Text>
         </View>
-
       </ScrollView>
     </SafeAreaView>
   );
@@ -141,7 +194,7 @@ export default function SaldoScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F7FA',
+    backgroundColor: '#F8F9FB',
   },
 
   content: {
@@ -152,7 +205,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 25,
+    marginBottom: 24,
   },
 
   back: {
@@ -163,71 +216,93 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontSize: 30,
-    fontWeight: '800',
+    fontSize: 22,
+    fontWeight: '700',
   },
 
   subtitle: {
-    marginTop: 4,
+    marginTop: 2,
     color: '#68707D',
-    fontSize: 14,
-  },
-
-  totalCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 22,
-    padding: 24,
-    marginBottom: 18,
-    elevation: 3,
-  },
-
-  totalLabel: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#777',
+  },
+
+  totalSection: {
+    alignItems: 'center',
+    paddingTop: 8,
+    paddingBottom: 20,
   },
 
   totalValue: {
-    marginTop: 8,
-    fontSize: 32,
-    fontWeight: '800',
+    fontSize: 30,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
 
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 20,
-    marginBottom: 12,
+  accountList: {
+    marginTop: 22,
+  },
+
+  accountRow: {
+    minHeight: 48,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    elevation: 2,
+    justifyContent: 'space-between',
   },
 
-  creditCard: {
-    backgroundColor: '#FFF7E6',
-    borderRadius: 18,
-    padding: 20,
-    marginTop: 8,
+  accountLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 
   accountName: {
-    fontSize: 16,
-    fontWeight: '700',
+    marginLeft: 7,
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#252A31',
   },
 
   accountValue: {
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#252A31',
   },
 
   accountValueNegative: {
     color: '#C94C4C',
   },
 
-  creditInfo: {
-    marginTop: 6,
+  ovoLogo: {
     fontSize: 12,
-    color: '#777',
+    fontWeight: '800',
+    color: '#735BA8',
+  },
+
+  creditSection: {
+    marginTop: 32,
+    marginHorizontal: -8,
+    paddingHorizontal: 16,
+    paddingTop: 15,
+    paddingBottom: 14,
+    backgroundColor: '#FCF5E9',
+    borderRadius: 14,
+  },
+
+  creditName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#5D4B32',
+  },
+
+  creditValue: {
+    marginTop: 6,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#3D352B',
+  },
+
+  creditInfo: {
+    marginTop: 3,
+    fontSize: 11,
+    color: '#8A7B67',
   },
 });

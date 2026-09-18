@@ -233,13 +233,20 @@ export default function KreditGrabScreen() {
       ]
     );
   }
-  
+
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
 
+        {/* HEADER */}
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()}>
+          <Pressable
+            onPress={() => router.back()}
+            style={styles.backButton}
+          >
             <Text style={styles.back}>‹</Text>
           </Pressable>
 
@@ -254,78 +261,88 @@ export default function KreditGrabScreen() {
           </View>
         </View>
 
-        <View style={styles.creditCard}>
-          <Text style={styles.creditLabel}>
-            SALDO KREDIT GRAB
-          </Text>
-
-          <Text style={styles.creditValue}>
+        {/* SALDO KREDIT */}
+        <View style={styles.balanceSection}>
+          <Text style={styles.balanceValue}>
             {formatRupiah(saldo.kredit_grab)}
           </Text>
 
-          <Text style={styles.creditInfo}>
-            Tidak dihitung sebagai total aset.
+          <Text style={styles.balanceLabel}>
+            Saldo Kredit Grab
+          </Text>
+
+          <Text style={styles.balanceInfo}>
+            Tidak termasuk dalam total aset
           </Text>
         </View>
 
-        <View style={styles.infoCard}>
+        {/* INFO */}
+        <View style={styles.infoBox}>
           <Text style={styles.infoTitle}>
-            Cara Top Up
+            Top up Kredit Grab
           </Text>
 
           <Text style={styles.infoText}>
-            • Dompet Grab → Kredit Grab
+            Dompet Grab → Kredit Grab
           </Text>
 
           <Text style={styles.infoText}>
-            • OVO → Kredit Grab + biaya admin Rp1.000
+            OVO → Kredit Grab dikenakan admin Rp1.000
           </Text>
         </View>
 
+        {/* SUMBER DANA */}
         <Text style={styles.sectionTitle}>
           Sumber Dana
         </Text>
 
         <View style={styles.accountList}>
-          {sumber.map((item) => (
-            <Pressable
-              key={item.key}
-              style={[
-                styles.accountButton,
-                sumberDipilih === item.key &&
-                  styles.accountSelected,
-              ]}
-              onPress={() =>
-                setSumberDipilih(item.key)
-              }
-            >
-              <Text
-                style={[
-                  styles.accountText,
-                  sumberDipilih === item.key &&
-                    styles.accountTextSelected,
-                ]}
-              >
-                {item.label}
-              </Text>
+          {sumber.map((item) => {
+            const dipilih =
+              sumberDipilih === item.key;
 
-              <Text
+            const saldoSumber =
+              item.key === 'ovo'
+                ? saldo.ovo
+                : saldo.dompet_grab;
+
+            return (
+              <Pressable
+                key={item.key}
                 style={[
-                  styles.accountBalance,
-                  sumberDipilih === item.key &&
-                    styles.accountBalanceSelected,
+                  styles.accountButton,
+                  dipilih &&
+                    styles.accountButtonSelected,
                 ]}
+                onPress={() =>
+                  setSumberDipilih(item.key)
+                }
               >
-                {formatRupiah(
-                  item.key === 'ovo'
-                    ? saldo.ovo
-                    : saldo.dompet_grab
-                )}
-              </Text>
-            </Pressable>
-          ))}
+                <Text
+                  style={[
+                    styles.accountText,
+                    dipilih &&
+                      styles.accountTextSelected,
+                  ]}
+                >
+                  {item.label}
+                </Text>
+
+                <Text
+                  style={[
+                    styles.accountBalance,
+                    dipilih &&
+                      styles.accountBalanceSelected,
+                  ]}
+                >
+                  {formatRupiah(saldoSumber)}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
 
+        {/* NOMINAL */}
         <Text style={styles.sectionTitle}>
           Nominal Top Up
         </Text>
@@ -333,28 +350,33 @@ export default function KreditGrabScreen() {
         <TextInput
           style={styles.input}
           placeholder="Contoh: 50000"
+          placeholderTextColor="#9AA1AA"
           keyboardType="numeric"
           value={nominal}
           onChangeText={setNominal}
         />
 
+        {/* ADMIN */}
         {sumberDipilih === 'ovo' && (
-          <View style={styles.adminCard}>
-            <Text style={styles.adminText}>
-              Biaya admin
-            </Text>
+          <View style={styles.adminBox}>
+            <View style={styles.adminRow}>
+              <Text style={styles.adminLabel}>
+                Biaya admin
+              </Text>
 
-            <Text style={styles.adminValue}>
-              Rp1.000
-            </Text>
+              <Text style={styles.adminValue}>
+                Rp1.000
+              </Text>
+            </View>
 
             <Text style={styles.adminDescription}>
-              OVO akan dipotong sebesar nominal
+              Saldo OVO dipotong sebesar nominal
               top up + Rp1.000.
             </Text>
           </View>
         )}
 
+        {/* SIMPAN */}
         <Pressable
           style={styles.saveButton}
           onPress={simpanTopUp}
@@ -364,6 +386,7 @@ export default function KreditGrabScreen() {
           </Text>
         </Pressable>
 
+        {/* RIWAYAT */}
         <Text style={styles.sectionTitle}>
           Riwayat Top Up
         </Text>
@@ -375,46 +398,49 @@ export default function KreditGrabScreen() {
             </Text>
           </View>
         ) : (
-          riwayat.map((item) => (
-            <View
-              key={item.id}
-              style={styles.historyCard}
-            >
-              <View>
-                <Text style={styles.historyTitle}>
-                  {item.sumber} → Kredit Grab
-                </Text>
-
-                <Text style={styles.historyDate}>
-                  {item.tanggal}
-                </Text>
-              </View>
-
-              <View>
-                <Text style={styles.historyValue}>
-                  +{formatRupiah(item.nominal)}
-                </Text>
-
-                {item.biaya_admin > 0 && (
-                  <Text style={styles.historyAdmin}>
-                    Admin {formatRupiah(item.biaya_admin)}
+          <View style={styles.historyList}>
+            {riwayat.map((item) => (
+              <View
+                key={item.id}
+                style={styles.historyItem}
+              >
+                <View style={styles.historyLeft}>
+                  <Text style={styles.historyTitle}>
+                    {item.sumber} → Kredit Grab
                   </Text>
-                )}
+
+                  <Text style={styles.historyDate}>
+                    {item.tanggal}
+                  </Text>
+                </View>
+
+                <View style={styles.historyRight}>
+                  <Text style={styles.historyValue}>
+                    +{formatRupiah(item.nominal)}
+                  </Text>
+
+                  {item.biaya_admin > 0 && (
+                    <Text style={styles.historyAdmin}>
+                      Admin {formatRupiah(
+                        item.biaya_admin
+                      )}
+                    </Text>
+                  )}
+                </View>
               </View>
-            </View>
-          ))
+            ))}
+          </View>
         )}
 
       </ScrollView>
     </SafeAreaView>
   );
-
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F7FA',
+    backgroundColor: '#F8F9FB',
   },
 
   content: {
@@ -422,211 +448,261 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
 
+  /* HEADER */
+
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 25,
+    marginBottom: 24,
+  },
+
+  backButton: {
+    marginRight: 12,
+    paddingRight: 2,
   },
 
   back: {
-    fontSize: 42,
-    lineHeight: 42,
-    marginRight: 15,
-    color: '#333',
+    fontSize: 38,
+    lineHeight: 38,
+    color: '#333B45',
   },
 
   title: {
-    fontSize: 30,
-    fontWeight: '800',
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#20252B',
   },
 
   subtitle: {
-    marginTop: 4,
-    color: '#68707D',
-    fontSize: 14,
-  },
-
-  creditCard: {
-    backgroundColor: '#FFF7E6',
-    borderRadius: 22,
-    padding: 24,
-    marginBottom: 18,
-    elevation: 3,
-  },
-
-  creditLabel: {
+    marginTop: 3,
     fontSize: 12,
-    fontWeight: '700',
-    color: '#777',
+    color: '#7B838E',
   },
 
-  creditValue: {
-    marginTop: 8,
-    fontSize: 34,
-    fontWeight: '800',
-  },
+  /* SALDO */
 
-  creditInfo: {
-    marginTop: 8,
-    color: '#777',
-    fontSize: 12,
-  },
-
-  infoCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 20,
+  balanceSection: {
+    alignItems: 'center',
     marginBottom: 22,
   },
 
+  balanceValue: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: '#20252B',
+  },
+
+  balanceLabel: {
+    marginTop: 5,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#606874',
+  },
+
+  balanceInfo: {
+    marginTop: 4,
+    fontSize: 11,
+    color: '#969DA6',
+  },
+
+  /* INFO */
+
+  infoBox: {
+    backgroundColor: '#FCF4E8',
+    borderRadius: 12,
+    paddingHorizontal: 15,
+    paddingVertical: 13,
+    marginBottom: 24,
+  },
+
   infoTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    marginBottom: 8,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#8A6A3D',
+    marginBottom: 5,
   },
 
   infoText: {
-    color: '#666',
-    fontSize: 13,
-    lineHeight: 22,
+    fontSize: 12,
+    lineHeight: 20,
+    color: '#796B58',
   },
+
+  /* SECTION */
 
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    marginTop: 5,
-    marginBottom: 12,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#30363D',
+    marginBottom: 10,
   },
 
+  /* SUMBER DANA */
+
   accountList: {
-    gap: 10,
-    marginBottom: 15,
+    gap: 9,
+    marginBottom: 20,
   },
 
   accountButton: {
-    backgroundColor: '#FFFFFF',
-    padding: 17,
-    borderRadius: 16,
+    minHeight: 52,
+    paddingHorizontal: 15,
+    borderRadius: 12,
+    backgroundColor: '#F0F1F3',
     borderWidth: 1,
-    borderColor: '#E1E4E8',
+    borderColor: '#E1E3E6',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+  accountButtonSelected: {
+    backgroundColor: '#E8F2FC',
+    borderColor: '#BFD6EB',
+  },
+
+  accountText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#707782',
+  },
+
+  accountTextSelected: {
+    color: '#4F7298',
+  },
+
+  accountBalance: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#858C96',
+  },
+
+  accountBalanceSelected: {
+    color: '#4F7298',
+  },
+
+  /* INPUT */
+
+  input: {
+    backgroundColor: '#F1F3F5',
+    borderRadius: 12,
+    paddingHorizontal: 15,
+    paddingVertical: 13,
+    fontSize: 15,
+    color: '#20252B',
+    marginBottom: 12,
+  },
+
+  /* ADMIN */
+
+  adminBox: {
+    backgroundColor: '#F0F4F8',
+    borderRadius: 12,
+    paddingHorizontal: 15,
+    paddingVertical: 13,
+    marginBottom: 15,
+  },
+
+  adminRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
 
-  accountSelected: {
-    backgroundColor: '#222',
-    borderColor: '#222',
-  },
-
-  accountText: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-
-  accountTextSelected: {
-    color: '#FFFFFF',
-  },
-
-  accountBalance: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#666',
-  },
-
-  accountBalanceSelected: {
-    color: '#FFFFFF',
-  },
-
-  input: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 15,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    marginBottom: 15,
-  },
-
-  adminCard: {
-    backgroundColor: '#FFF7E6',
-    borderRadius: 15,
-    padding: 16,
-    marginBottom: 18,
-  },
-
-  adminText: {
+  adminLabel: {
     fontSize: 13,
-    color: '#777',
+    fontWeight: '600',
+    color: '#657080',
   },
 
   adminValue: {
-    marginTop: 4,
-    fontSize: 17,
-    fontWeight: '800',
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#4F7298',
   },
 
   adminDescription: {
     marginTop: 5,
-    fontSize: 12,
-    color: '#777',
+    fontSize: 11,
+    lineHeight: 17,
+    color: '#7C8793',
   },
 
+  /* BUTTON */
+
   saveButton: {
-    backgroundColor: '#222',
-    borderRadius: 16,
-    paddingVertical: 16,
+    backgroundColor: '#5B7FA5',
+    borderRadius: 12,
+    paddingVertical: 14,
     alignItems: 'center',
-    marginBottom: 28,
+    marginTop: 3,
+    marginBottom: 70,
   },
 
   saveText: {
     color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 14,
+    fontWeight: '700',
   },
 
+  /* EMPTY */
+
   empty: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 25,
+    paddingVertical: 20,
     alignItems: 'center',
   },
 
   emptyText: {
-    color: '#888',
+    color: '#8A919A',
+    fontSize: 12,
   },
 
-  historyCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 17,
-    marginBottom: 10,
+  /* HISTORY */
+
+  historyList: {
+    marginTop: 0,
+  },
+
+  historyItem: {
+    minHeight: 48,
+    paddingVertical: 7,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eceef1b9',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    elevation: 1,
+  },
+
+  historyLeft: {
+    flex: 1,
+    paddingRight: 10,
   },
 
   historyTitle: {
-    fontSize: 14,
-    fontWeight: '800',
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#343A42',
   },
 
   historyDate: {
-    marginTop: 5,
-    fontSize: 12,
-    color: '#888',
+    marginTop: 2,
+    fontSize: 11,
+    color: '#939AA3',
+  },
+
+  historyRight: {
+    alignItems: 'flex-end',
   },
 
   historyValue: {
-    fontSize: 14,
-    fontWeight: '800',
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#4E8A67',
   },
 
   historyAdmin: {
-    marginTop: 4,
-    fontSize: 11,
-    color: '#888',
-    textAlign: 'right',
+    marginTop: 3,
+    fontSize: 10,
+    color: '#9299A2',
   },
 });

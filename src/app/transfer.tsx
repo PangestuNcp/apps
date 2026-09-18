@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   SafeAreaView,
   View,
@@ -8,16 +8,21 @@ import {
   TextInput,
   Alert,
   ScrollView,
+  Animated,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import db from '../database/database';
 
-const tujuan = [
+const sumber = [
+  { key: 'dompet_grab', label: 'Dompet Grab' },
   { key: 'ovo', label: 'OVO' },
   { key: 'seabank', label: 'SeaBank' },
 ] as const;
 
-type TujuanKey = (typeof tujuan)[number]['key'];
+type SumberKey = (typeof sumber)[number]['key'];
+
+type TujuanKey = 'ovo' | 'seabank';
 
 function formatRupiah(nominal: number) {
   return `Rp${nominal.toLocaleString('id-ID')}`;
@@ -26,11 +31,70 @@ function formatRupiah(nominal: number) {
 export default function TransferScreen() {
   const router = useRouter();
 
-  const [ke, setKe] = useState<TujuanKey>('ovo');
+  const [dari, setDari] =
+    useState<SumberKey>('dompet_grab');
+
+  const [ke, setKe] =
+    useState<TujuanKey>('ovo');
+
   const [nominal, setNominal] = useState('');
 
+  const lebarOvo = useRef(
+    new Animated.Value(0.8)
+  ).current;
+
+  const lebarSeaBank = useRef(
+    new Animated.Value(0.2)
+  ).current;
+
+  const warnaOvo = useRef(
+    new Animated.Value(1)
+  ).current;
+
+  const warnaSeaBank = useRef(
+    new Animated.Value(0)
+  ).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(lebarOvo, {
+        toValue: ke === 'ovo' ? 0.8 : 0.2,
+        useNativeDriver: false,
+        tension: 70,
+        friction: 10,
+      }),
+
+      Animated.spring(lebarSeaBank, {
+        toValue: ke === 'seabank' ? 0.8 : 0.2,
+        useNativeDriver: false,
+        tension: 70,
+        friction: 10,
+      }),
+
+      Animated.timing(warnaOvo, {
+        toValue: ke === 'ovo' ? 1 : 0,
+        duration: 220,
+        useNativeDriver: false,
+      }),
+
+      Animated.timing(warnaSeaBank, {
+        toValue: ke === 'seabank' ? 1 : 0,
+        duration: 220,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  }, [
+    ke,
+    lebarOvo,
+    lebarSeaBank,
+    warnaOvo,
+    warnaSeaBank,
+  ]);
+
   function simpan() {
-    const nilai = Number(nominal.replace(/\D/g, ''));
+    const nilai = Number(
+      nominal.replace(/\D/g, '')
+    );
 
     if (!nilai || nilai <= 0) {
       Alert.alert(
@@ -40,15 +104,37 @@ export default function TransferScreen() {
       return;
     }
 
-    const saldoGrab = db.getFirstSync<{
-      saldo: number;
+    if (dari === ke) {
+      Alert.alert(
+        'Transfer tidak valid',
+        'Sumber dan tujuan tidak boleh sama.'
+      );
+      return;
+    }
+
+    const biayaAdmin =
+      dari === 'seabank' && ke === 'ovo'
+        ? 1000
+        : 0;
+
+    const totalPotong = nilai + biayaAdmin;
+
+    const data = db.getFirstSync<{
+      cash: number;
+      dompet_grab: number;
+      ovo: number;
+      seabank: number;
     }>(`
-      SELECT dompet_grab AS saldo
+      SELECT
+        cash,
+        dompet_grab,
+        ovo,
+        seabank
       FROM saldo
       WHERE id = 1
     `);
 
-    if (!saldoGrab) {
+    if (!data) {
       Alert.alert(
         'Data tidak ditemukan',
         'Data saldo belum tersedia.'
@@ -56,12 +142,32 @@ export default function TransferScreen() {
       return;
     }
 
-    if (saldoGrab.saldo < nilai) {
+    const saldoSumber =
+      dari === 'dompet_grab'
+        ? data.dompet_grab
+        : dari === 'ovo'
+          ? data.ovo
+          : data.seabank;
+
+    const namaSumber =
+      sumber.find(
+        (item) => item.key === dari
+      )?.label ?? dari;
+
+    const namaTujuan =
+      ke === 'ovo'
+        ? 'OVO'
+        : 'SeaBank';
+
+    if (saldoSumber < totalPotong) {
       Alert.alert(
         'Saldo tidak cukup',
-        `Saldo Dompet Grab hanya ${formatRupiah(
-          saldoGrab.saldo
-        )}.`
+        `Saldo ${namaSumber} hanya ${formatRupiah(
+          saldoSumber
+        )}.\n\n` +
+          `Yang dibutuhkan: ${formatRupiah(
+            totalPotong
+          )}`
       );
       return;
     }
@@ -70,21 +176,16 @@ export default function TransferScreen() {
       .toISOString()
       .slice(0, 10);
 
-    const namaTujuan =
-      tujuan.find((item) => item.key === ke)?.label ?? ke;
-
     db.withTransactionSync(() => {
-      // Dompet Grab berkurang
       db.runSync(
         `
         UPDATE saldo
-        SET dompet_grab = dompet_grab - ?
+        SET ${dari} = ${dari} - ?
         WHERE id = 1
         `,
-        [nilai]
+        [totalPotong]
       );
 
-      // OVO / SeaBank bertambah
       db.runSync(
         `
         UPDATE saldo
@@ -94,7 +195,6 @@ export default function TransferScreen() {
         [nilai]
       );
 
-      // Catat transaksi
       db.runSync(
         `
         INSERT INTO transaksi
@@ -104,18 +204,56 @@ export default function TransferScreen() {
         [
           tanggal,
           'transfer',
-          `Dompet Grab -> ${namaTujuan}`,
-          'Pemindahan saldo Dompet Grab',
+          `${namaSumber} -> ${namaTujuan}`,
+          `Pemindahan saldo ${namaSumber} ke ${namaTujuan}`,
           nilai,
         ]
       );
+
+      if (biayaAdmin > 0) {
+        db.runSync(
+          `
+          INSERT INTO transaksi
+          (
+            tanggal,
+            jenis,
+            subjenis,
+            keterangan,
+            nominal,
+            deskripsi
+          )
+          VALUES (?, ?, ?, ?, ?, ?)
+          `,
+          [
+            tanggal,
+            'pengeluaran',
+            dari,
+            'Admin transfer seabank',
+            biayaAdmin,
+            'Biaya admin transfer SeaBank → OVO',
+          ]
+        );
+      }
     });
 
     setNominal('');
 
+    let pesan =
+      `${formatRupiah(nilai)} berhasil dipindahkan ` +
+      `dari ${namaSumber} ke ${namaTujuan}.`;
+
+    if (biayaAdmin > 0) {
+      pesan +=
+        `\n\nBiaya admin: ${formatRupiah(
+          biayaAdmin
+        )}\n` +
+        `Total dipotong dari ${namaSumber}: ` +
+        `${formatRupiah(totalPotong)}`;
+    }
+
     Alert.alert(
       'Berhasil',
-      `${formatRupiah(nilai)} berhasil dipindahkan dari Dompet Grab ke ${namaTujuan}.`,
+      pesan,
       [
         {
           text: 'OK',
@@ -127,10 +265,15 @@ export default function TransferScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
-
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()}>
+          <Pressable
+            onPress={() => router.back()}
+            hitSlop={10}
+          >
             <Text style={styles.back}>‹</Text>
           </Pressable>
 
@@ -140,66 +283,227 @@ export default function TransferScreen() {
             </Text>
 
             <Text style={styles.subtitle}>
-              Pindahkan saldo Dompet Grab
+              Pindahkan saldo antar akun
             </Text>
           </View>
         </View>
 
-        <View style={styles.infoCard}>
-          <Text style={styles.infoLabel}>
-            SUMBER
-          </Text>
+        {/* SUMBER */}
 
-          <Text style={styles.infoTitle}>
-            Dompet Grab
-          </Text>
+        {dari === 'dompet_grab' ? (
+          <Pressable
+            style={[
+              styles.accountButton,
+              styles.accountSelected,
+            ]}
+            onPress={() => setDari('dompet_grab')}
+          >
+            <Text style={styles.accountTextSelected}>
+              Dompet Grab
+            </Text>
+          </Pressable>
+        ) : (
+          <Pressable
+            style={styles.accountButton}
+            onPress={() => setDari('dompet_grab')}
+          >
+            <Text style={styles.accountText}>
+              Dompet Grab
+            </Text>
+          </Pressable>
+        )}
 
-          <Text style={styles.infoDescription}>
-            Saldo Dompet Grab harus dipindahkan
-            terlebih dahulu sebelum dapat digunakan
-            untuk pengeluaran.
-          </Text>
+        <View style={styles.accountRow}>
+          <Pressable
+            style={[
+              styles.accountButtonHalf,
+              dari === 'ovo' &&
+                styles.accountSelected,
+            ]}
+            onPress={() => {
+              setDari('ovo');
+              setKe('seabank');
+            }}
+          >
+            <Text
+              style={[
+                styles.accountText,
+                dari === 'ovo' &&
+                  styles.accountTextSelected,
+              ]}
+            >
+              OVO
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={[
+              styles.accountButtonHalf,
+              dari === 'seabank' &&
+                styles.accountSelected,
+            ]}
+            onPress={() => {
+              setDari('seabank');
+              setKe('ovo');
+            }}
+          >
+            <Text
+              style={[
+                styles.accountText,
+                dari === 'seabank' &&
+                  styles.accountTextSelected,
+              ]}
+            >
+              SeaBank
+            </Text>
+          </Pressable>
         </View>
 
-        <Text style={styles.label}>
-          Pindahkan ke
-        </Text>
+        {/* ARAH TRANSFER OVO / SEABANK */}
 
-        <View style={styles.accountList}>
-          {tujuan.map((item) => (
-            <Pressable
-              key={item.key}
-              style={[
-                styles.accountButton,
-                ke === item.key &&
-                  styles.accountSelected,
-              ]}
-              onPress={() => setKe(item.key)}
-            >
-              <Text
+        {dari !== 'dompet_grab' && (
+          <View style={styles.transferDirection}>
+            <Text style={styles.directionText}>
+              {dari === 'ovo'
+                ? 'OVO'
+                : 'SeaBank'}
+            </Text>
+
+            <Ionicons
+              name="arrow-forward"
+              size={20}
+              color="#5B7FA5"
+            />
+
+            <Text style={styles.directionText}>
+              {ke === 'ovo'
+                ? 'OVO'
+                : 'SeaBank'}
+            </Text>
+          </View>
+        )}
+
+        {/* TUJUAN DOMPET GRAB */}
+        {dari === 'dompet_grab' && (
+          <View style={styles.destinationSection}>
+            <View style={styles.destinationRow}>
+              <Animated.View
                 style={[
-                  styles.accountText,
-                  ke === item.key &&
-                    styles.accountTextSelected,
+                  styles.destinationAnimated,
+                  {
+                    flex: lebarOvo,
+                    backgroundColor: warnaOvo.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [
+                        '#F0F1F3',
+                        '#E8F2FC',
+                      ],
+                    }),
+                    borderColor: warnaOvo.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [
+                        '#E1E3E6',
+                        '#BFD6EB',
+                      ],
+                    }),
+                  },
                 ]}
               >
-                {item.label}
+                <Pressable
+                  style={styles.destinationPressable}
+                  onPress={() => setKe('ovo')}
+                >
+                  <Text
+                    style={[
+                      styles.destinationText,
+                      ke === 'ovo' &&
+                        styles.destinationTextSelected,
+                    ]}
+                  >
+                    {ke === 'ovo'
+                      ? 'Dompet Grab → OVO'
+                      : 'OVO'}
+                  </Text>
+                </Pressable>
+              </Animated.View>
+
+              <Animated.View
+                style={[
+                  styles.destinationAnimated,
+                  {
+                    flex: lebarSeaBank,
+                    backgroundColor:
+                      warnaSeaBank.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [
+                          '#F0F1F3',
+                          '#E8F2FC',
+                        ],
+                      }),
+                    borderColor:
+                      warnaSeaBank.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [
+                          '#E1E3E6',
+                          '#BFD6EB',
+                        ],
+                      }),
+                  },
+                ]}
+              >
+                <Pressable
+                  style={styles.destinationPressable}
+                  onPress={() => setKe('seabank')}
+                >
+                  <Text
+                    style={[
+                      styles.destinationText,
+                      ke === 'seabank' &&
+                        styles.destinationTextSelected,
+                    ]}
+                  >
+                    {ke === 'seabank'
+                      ? 'Dompet Grab → SeaBank'
+                      : 'SeaBank'}
+                  </Text>
+                </Pressable>
+              </Animated.View>
+            </View>
+          </View>
+        )}
+
+        {/* ADMIN */}
+
+        {dari === 'seabank' &&
+          ke === 'ovo' && (
+            <View style={styles.adminCard}>
+              <Text style={styles.adminTitle}>
+                Biaya Admin
               </Text>
-            </Pressable>
-          ))}
+
+              <Text style={styles.adminText}>
+                Transfer SeaBank ke OVO dikenakan
+                biaya admin Rp1.000.
+              </Text>
+            </View>
+          )}
+
+        {/* NOMINAL */}
+
+        <View style={styles.nominalSection}>
+          <Text style={styles.label}>
+            Nominal
+          </Text>
+
+          <TextInput
+            style={styles.input}
+            placeholder="Contoh: 50000"
+            placeholderTextColor="#9AA1AB"
+            keyboardType="numeric"
+            value={nominal}
+            onChangeText={setNominal}
+          />
         </View>
-
-        <Text style={styles.label}>
-          Nominal
-        </Text>
-
-        <TextInput
-          style={styles.input}
-          placeholder="Contoh: 50000"
-          keyboardType="numeric"
-          value={nominal}
-          onChangeText={setNominal}
-        />
 
         <Pressable
           style={styles.saveButton}
@@ -209,7 +513,6 @@ export default function TransferScreen() {
             Simpan Transfer
           </Text>
         </Pressable>
-
       </ScrollView>
     </SafeAreaView>
   );
@@ -218,7 +521,7 @@ export default function TransferScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F7FA',
+    backgroundColor: '#F8F9FB',
   },
 
   content: {
@@ -229,7 +532,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 25,
+    marginBottom: 24,
   },
 
   back: {
@@ -240,96 +543,177 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontSize: 30,
-    fontWeight: '800',
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#252A31',
   },
 
   subtitle: {
-    marginTop: 4,
+    marginTop: 2,
     color: '#68707D',
-    fontSize: 14,
-  },
-
-  infoCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 25,
-    elevation: 2,
-  },
-
-  infoLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#777',
-  },
-
-  infoTitle: {
-    marginTop: 6,
-    fontSize: 20,
-    fontWeight: '800',
-  },
-
-  infoDescription: {
-    marginTop: 7,
-    fontSize: 13,
-    lineHeight: 19,
-    color: '#737A85',
+    fontSize: 12,
   },
 
   label: {
-    marginTop: 8,
-    marginBottom: 10,
-    fontSize: 14,
+    marginBottom: 7,
+    fontSize: 13,
     fontWeight: '700',
-  },
-
-  accountList: {
-    gap: 10,
-    marginBottom: 15,
+    color: '#555D68',
   },
 
   accountButton: {
     backgroundColor: '#FFFFFF',
-    padding: 16,
-    borderRadius: 15,
+    paddingHorizontal: 15,
+    paddingVertical: 14,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E1E4E8',
+    borderColor: '#E4E7EB',
+    marginBottom: 9,
+  },
+
+  accountRow: {
+    flexDirection: 'row',
+    gap: 9,
+    marginBottom: 10,
+  },
+
+  accountButtonHalf: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 15,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E4E7EB',
+    alignItems: 'center',
+  },
+
+  destinationRow: {
+    flexDirection: 'row',
+    gap: 9,
+    height: 52,
+  },
+
+  destinationAnimated: {
+    minWidth: 0,
+    borderWidth: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+
+  destinationPressable: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+  },
+
+  destinationText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#8A929D',
+    textAlign: 'center',
+  },
+
+  destinationTextSelected: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#4F7298',
+  },
+
+  accountButtonWide: {
+    flex: 1.7,
   },
 
   accountSelected: {
-    backgroundColor: '#222',
-    borderColor: '#222',
+    backgroundColor: '#EEF4FA',
+    borderColor: '#BFD2E5',
   },
 
   accountText: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '600',
+    color: '#252A31',
   },
 
   accountTextSelected: {
-    color: '#FFFFFF',
+    color: '#4F7298',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  directionButtonText: {
+    fontSize: 12.5,
+    textAlign: 'center',
+  },
+
+  transferDirection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    marginTop: 4,
+    marginBottom: 18,
+    paddingVertical: 12,
+  },
+
+  directionText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#252A31',
+  },
+
+  destinationSection: {
+    marginTop: 30,
+    marginBottom: 5,
+  },
+
+  adminCard: {
+    backgroundColor: '#F0F6FB',
+    borderRadius: 12,
+    paddingHorizontal: 15,
+    paddingVertical: 13,
+    marginTop: 5,
+    marginBottom: 14,
+  },
+
+  adminTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#4F7298',
+    marginBottom: 4,
+  },
+
+  adminText: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#68707D',
+  },
+
+  nominalSection: {
+    marginTop: 4,
   },
 
   input: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 15,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    backgroundColor: '#F1F3F5',
+    borderRadius: 12,
+    paddingHorizontal: 15,
+    paddingVertical: 13,
     fontSize: 16,
-    marginBottom: 25,
+    color: '#252A31',
+    marginBottom: 18,
   },
 
   saveButton: {
-    backgroundColor: '#222',
-    borderRadius: 16,
-    paddingVertical: 16,
+    backgroundColor: '#5B7FA5',
+    borderRadius: 12,
+    paddingVertical: 14,
     alignItems: 'center',
+    marginTop: 4,
   },
 
   saveText: {
     color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 15,
+    fontWeight: '700',
   },
 });

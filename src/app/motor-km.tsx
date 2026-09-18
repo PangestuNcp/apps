@@ -1,4 +1,5 @@
 import React, { useCallback, useState } from 'react';
+
 import {
   SafeAreaView,
   View,
@@ -9,7 +10,10 @@ import {
   Alert,
   ScrollView,
 } from 'react-native';
+
 import { useFocusEffect, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+
 import db from '../database/database';
 
 type Motor = {
@@ -31,11 +35,10 @@ function parseKM(input: string): number {
     return 0;
   }
 
-  // Jika menggunakan titik/koma:
+  // Format langsung dengan titik:
   // 33312.1 -> 33312.1
   if (value.includes('.')) {
     const km = Number(value);
-
     return Number.isFinite(km) ? km : 0;
   }
 
@@ -43,15 +46,14 @@ function parseKM(input: string): number {
   // 333121 -> 33312.1
   // 333129 -> 33312.9
   // 333130 -> 33313.0
-  //
-  // Angka sampai 5 digit tetap dianggap KM biasa:
-  // 33312 -> 33312.0
   const digits = value.replace(/\D/g, '');
 
   if (!digits) {
     return 0;
   }
 
+  // Angka sampai 5 digit dianggap KM biasa:
+  // 33312 -> 33312.0
   if (digits.length >= 6) {
     const angkaUtama = digits.slice(0, -1);
     const desimal = digits.slice(-1);
@@ -85,8 +87,7 @@ export default function MotorKmScreen() {
     const data = db.getFirstSync<Motor>(`
       SELECT
         km_sekarang,
-        km_terakhir_update,
-        tanggal_update_terakhir
+        km_terakhir_update
       FROM motor
       WHERE id = 1
     `);
@@ -174,16 +175,22 @@ export default function MotorKmScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
-
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* HEADER */}
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()}>
+          <Pressable
+            onPress={() => router.back()}
+            hitSlop={10}
+          >
             <Text style={styles.back}>‹</Text>
           </Pressable>
 
           <View>
             <Text style={styles.title}>
-              Kilometer
+              Update KM
             </Text>
 
             <Text style={styles.subtitle}>
@@ -192,9 +199,10 @@ export default function MotorKmScreen() {
           </View>
         </View>
 
-        <View style={styles.currentCard}>
-          <Text style={styles.label}>
-            KM SAAT INI
+        {/* KM SAAT INI */}
+        <View style={styles.currentSection}>
+          <Text style={styles.currentLabel}>
+            Kilometer motor saat ini
           </Text>
 
           <Text style={styles.currentKm}>
@@ -208,22 +216,36 @@ export default function MotorKmScreen() {
           )}
         </View>
 
-        <View style={styles.formCard}>
-          <Text style={styles.formTitle}>
-            Update KM
-          </Text>
+        {/* FORM UPDATE */}
+        <View style={styles.formSection}>
+          <View style={styles.sectionHeader}>
+            <Ionicons
+              name="location-outline"
+              size={19}
+              color="#4E8A67"
+            />
 
-          <Text style={styles.inputInfo}>
-            Bisa masukkan 333121 atau 33312.1
+            <Text style={styles.sectionTitle}>
+              Update Kilometer
+            </Text>
+          </View>
+
+          <Text style={styles.inputLabel}>
+            Masukkan KM terbaru
           </Text>
 
           <TextInput
             style={styles.input}
             placeholder="Contoh: 333121"
+            placeholderTextColor="#9AA0A8"
             keyboardType="numeric"
             value={kmInput}
             onChangeText={setKmInput}
           />
+
+          <Text style={styles.inputInfo}>
+            Bisa masukkan 333121 atau 33312.1
+          </Text>
 
           <Pressable
             style={styles.button}
@@ -235,9 +257,20 @@ export default function MotorKmScreen() {
           </Pressable>
         </View>
 
-        <Text style={styles.sectionTitle}>
-          Riwayat KM
-        </Text>
+        {/* RIWAYAT */}
+        <View style={styles.historyHeader}>
+          <View style={styles.sectionHeader}>
+            <Ionicons
+              name="time-outline"
+              size={19}
+              color="#68707D"
+            />
+
+            <Text style={styles.historyTitle}>
+              Riwayat KM
+            </Text>
+          </View>
+        </View>
 
         {riwayat.length === 0 ? (
           <View style={styles.empty}>
@@ -246,24 +279,31 @@ export default function MotorKmScreen() {
             </Text>
           </View>
         ) : (
-          riwayat.map((item) => (
-            <View
-              key={item.id}
-              style={styles.historyCard}
-            >
-              <View>
-                <Text style={styles.historyKm}>
-                  {formatKM(item.km)} KM
-                </Text>
+          <View style={styles.historyList}>
+            {riwayat.map((item) => (
+              <View
+                key={item.id}
+                style={styles.historyItem}
+              >
+                <View style={styles.historyLeft}>
+                  <Text style={styles.historyKm}>
+                    {formatKM(item.km)} KM
+                  </Text>
 
-                <Text style={styles.historyDate}>
-                  {item.tanggal}
-                </Text>
+                  <Text style={styles.historyDate}>
+                    {item.tanggal}
+                  </Text>
+                </View>
+
+                <Ionicons
+                  name="checkmark-circle-outline"
+                  size={20}
+                  color="#4E8A67"
+                />
               </View>
-            </View>
-          ))
+            ))}
+          </View>
         )}
-
       </ScrollView>
     </SafeAreaView>
   );
@@ -272,7 +312,7 @@ export default function MotorKmScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F7FA',
+    backgroundColor: '#F8F9FB',
   },
 
   content: {
@@ -283,127 +323,153 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 25,
+    marginBottom: 24,
   },
 
   back: {
-    fontSize: 42,
-    lineHeight: 42,
-    marginRight: 15,
+    fontSize: 38,
+    lineHeight: 38,
+    marginRight: 12,
     color: '#333',
   },
 
   title: {
-    fontSize: 30,
-    fontWeight: '800',
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#222',
   },
 
   subtitle: {
-    marginTop: 4,
+    marginTop: 1,
     color: '#68707D',
-    fontSize: 14,
-  },
-
-  currentCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 22,
-    padding: 24,
-    marginBottom: 18,
-    elevation: 3,
-  },
-
-  label: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#777',
+  },
+
+  currentSection: {
+    alignItems: 'center',
+    marginBottom: 30,
+  },
+
+  currentLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#737A85',
   },
 
   currentKm: {
-    marginTop: 8,
-    fontSize: 34,
+    fontSize: 30,
     fontWeight: '800',
+    color: '#222',
+    marginTop: 6,
   },
 
   date: {
-    marginTop: 8,
-    color: '#888',
-    fontSize: 12,
+    marginTop: 6,
+    color: '#8A929D',
+    fontSize: 11,
   },
 
-  formCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 25,
+  formSection: {
+    marginBottom: 30,
   },
 
-  formTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    marginBottom: 5,
-  },
-
-  inputInfo: {
-    color: '#888',
-    fontSize: 12,
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 12,
+  },
+
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#222',
+    marginLeft: 7,
+  },
+
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#30343A',
+    marginBottom: 8,
   },
 
   input: {
-    backgroundColor: '#F5F7FA',
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    backgroundColor: '#F1F3F5',
+    borderRadius: 12,
+    paddingHorizontal: 15,
+    paddingVertical: 13,
     fontSize: 16,
-    marginBottom: 12,
+    color: '#222',
+  },
+
+  inputInfo: {
+    fontSize: 11,
+    color: '#8A929D',
+    marginTop: 7,
+    marginBottom: 13,
   },
 
   button: {
-    backgroundColor: '#222',
-    borderRadius: 15,
-    paddingVertical: 15,
+    backgroundColor: '#4F7298',
+    borderRadius: 12,
+    paddingVertical: 14,
     alignItems: 'center',
   },
 
   buttonText: {
     color: '#FFFFFF',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
   },
 
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    marginBottom: 12,
+  historyHeader: {
+    marginBottom: 4,
   },
 
-  empty: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 25,
+  historyTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#222',
+    marginLeft: 7,
+  },
+
+  historyList: {
+    marginTop: 2,
+  },
+
+  historyItem: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 13,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ECEEF1',
   },
 
-  emptyText: {
-    color: '#888',
-  },
-
-  historyCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 17,
-    marginBottom: 10,
-    elevation: 1,
+  historyLeft: {
+    flex: 1,
   },
 
   historyKm: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '800',
+    color: '#30343A',
   },
 
   historyDate: {
-    marginTop: 5,
+    fontSize: 11,
+    color: '#8A929D',
+    marginTop: 3,
+  },
+
+  empty: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+
+  emptyText: {
+    color: '#8A929D',
     fontSize: 12,
-    color: '#888',
   },
 });

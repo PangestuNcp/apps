@@ -1,860 +1,955 @@
 import React, { useCallback, useState } from 'react';
+
 import {
-  SafeAreaView,
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  TextInput,
-  Alert,
-  ScrollView,
+SafeAreaView,
+View,
+Text,
+StyleSheet,
+Pressable,
+TextInput,
+Alert,
+ScrollView,
 } from 'react-native';
+
 import { useFocusEffect, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+
 import db from '../database/database';
 
 type Motor = {
-  km_sekarang: number;
+km_sekarang: number;
 };
 
 type OliTerakhir = {
-  tanggal: string;
-  km_penggantian: number;
-  nominal: number;
-  interval_km: number;
-  km_berikutnya: number;
+tanggal: string;
+km_penggantian: number;
+nominal: number;
+interval_km: number;
+km_berikutnya: number;
 };
 
 type RiwayatOli = {
-  id: number;
-  tanggal: string;
-  km_penggantian: number;
-  nominal: number;
-  interval_km: number;
-  km_berikutnya: number;
+id: number;
+tanggal: string;
+km_penggantian: number;
+nominal: number;
+interval_km: number;
+km_berikutnya: number;
 };
 
 const INTERVAL_DEFAULT = 2000;
 
 function rupiah(n: number) {
-  return `Rp${n.toLocaleString('id-ID')}`;
+return `Rp${n.toLocaleString('id-ID')}`;
 }
 
 function formatKM(km: number) {
-  return km.toLocaleString('id-ID', {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-  });
+return km.toLocaleString('id-ID', {
+minimumFractionDigits: 1,
+maximumFractionDigits: 1,
+});
 }
 
 export default function MotorOliScreen() {
-  const router = useRouter();
+const router = useRouter();
 
-  const [kmSekarang, setKmSekarang] = useState(0);
+const [kmSekarang, setKmSekarang] = useState(0);
+const [oliTerakhir, setOliTerakhir] =
+useState<OliTerakhir | null>(null);
+const [riwayat, setRiwayat] =
+useState<RiwayatOli[]>([]);
 
-  const [oliTerakhir, setOliTerakhir] =
-    useState<OliTerakhir | null>(null);
+const [nominal, setNominal] = useState('');
+const [kmPenggantian, setKmPenggantian] = useState('');
 
-  const [riwayat, setRiwayat] =
-    useState<RiwayatOli[]>([]);
+const [akunBayar, setAkunBayar] =
+useState<'cash' | 'ovo' | 'seabank'>('cash');
 
-  const [nominal, setNominal] = useState('');
+const [interval, setInterval] = useState(
+String(INTERVAL_DEFAULT)
+);
 
-  const [kmPenggantian, setKmPenggantian] = useState('');
-
-  const [akunBayar, setAkunBayar] = useState<
-    'cash' | 'ovo' | 'seabank'
-  >('cash');
-
-  const [interval, setInterval] = useState(
-    String(INTERVAL_DEFAULT)
-  );
-
-  const loadData = useCallback(() => {
-    const motor = db.getFirstSync<Motor>(`
-      SELECT km_sekarang
+const loadData = useCallback(() => {
+const motor = db.getFirstSync<Motor>(`       SELECT km_sekarang
       FROM motor
       WHERE id = 1
     `);
 
-    if (motor) {
-      setKmSekarang(motor.km_sekarang);
-    }
 
-    const terakhir =
-      db.getFirstSync<OliTerakhir>(`
-        SELECT
-          tanggal,
-          km_penggantian,
-          nominal,
-          interval_km,
-          km_berikutnya
-        FROM oli
-        ORDER BY id DESC
-        LIMIT 1
-      `);
+if (motor) {
+  setKmSekarang(motor.km_sekarang);
+}
 
-    setOliTerakhir(terakhir ?? null);
+const terakhir =
+  db.getFirstSync<OliTerakhir>(`
+    SELECT
+      tanggal,
+      km_penggantian,
+      nominal,
+      interval_km,
+      km_berikutnya
+    FROM oli
+    ORDER BY id DESC
+    LIMIT 1
+  `);
 
-    const history =
-      db.getAllSync<RiwayatOli>(`
-        SELECT
-          id,
-          tanggal,
-          km_penggantian,
-          nominal,
-          interval_km,
-          km_berikutnya
-        FROM oli
-        ORDER BY id DESC
-      `);
+setOliTerakhir(terakhir ?? null);
 
-    setRiwayat(history);
-  }, []);
+const history =
+  db.getAllSync<RiwayatOli>(`
+    SELECT
+      id,
+      tanggal,
+      km_penggantian,
+      nominal,
+      interval_km,
+      km_berikutnya
+    FROM oli
+    ORDER BY id DESC
+  `);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadData();
-    }, [loadData])
+setRiwayat(history);
+
+
+}, []);
+
+useFocusEffect(
+useCallback(() => {
+loadData();
+}, [loadData])
+);
+
+function simpanOli() {
+const kmBaru = Number(
+kmPenggantian.replace(',', '.')
+);
+
+
+const harga = Number(
+  nominal.replace(/\D/g, '')
+);
+
+const intervalKm = Number(
+  interval.replace(/\D/g, '')
+);
+
+if (
+  !kmPenggantian ||
+  !Number.isFinite(kmBaru) ||
+  kmBaru <= 0
+) {
+  Alert.alert(
+    'KM tidak valid',
+    'Masukkan KM motor saat penggantian oli.'
   );
+  return;
+}
 
-  function simpanOli() {
-    const kmBaru = Number(
-      kmPenggantian.replace(',', '.')
-    );
+if (kmBaru < kmSekarang) {
+  Alert.alert(
+    'KM tidak valid',
+    `KM penggantian tidak boleh lebih kecil dari KM motor saat ini (${formatKM(
+      kmSekarang
+    )} KM).`
+  );
+  return;
+}
 
-    const harga = Number(
-      nominal.replace(/\D/g, '')
-    );
+if (!harga || harga <= 0) {
+  Alert.alert(
+    'Nominal salah',
+    'Masukkan harga pembelian oli.'
+  );
+  return;
+}
 
-    const intervalKm = Number(
-      interval.replace(/\D/g, '')
-    );
+if (!intervalKm || intervalKm <= 0) {
+  Alert.alert(
+    'Interval salah',
+    'Masukkan interval penggantian oli dalam KM.'
+  );
+  return;
+}
 
-    if (
-      !kmPenggantian ||
-      !Number.isFinite(kmBaru) ||
-      kmBaru <= 0
-    ) {
-      Alert.alert(
-        'KM tidak valid',
-        'Masukkan KM motor saat penggantian oli.'
-      );
-      return;
-    }
+const saldo = db.getFirstSync<{
+  cash: number;
+  ovo: number;
+  seabank: number;
+}>(`
+  SELECT cash, ovo, seabank
+  FROM saldo
+  WHERE id = 1
+`);
 
-    if (kmBaru < kmSekarang) {
-      Alert.alert(
-        'KM tidak valid',
-        `KM penggantian tidak boleh lebih kecil dari KM motor saat ini (${formatKM(kmSekarang)} KM).`
-      );
-      return;
-    }
+if (!saldo) {
+  Alert.alert(
+    'Saldo tidak ditemukan',
+    'Data saldo belum tersedia.'
+  );
+  return;
+}
 
-    if (!harga || harga <= 0) {
-      Alert.alert(
-        'Nominal salah',
-        'Masukkan harga pembelian oli.'
-      );
-      return;
-    }
+const saldoAkun = saldo[akunBayar];
 
-    if (!intervalKm || intervalKm <= 0) {
-      Alert.alert(
-        'Interval salah',
-        'Masukkan interval penggantian oli dalam KM.'
-      );
-      return;
-    }
-
-    const saldo = db.getFirstSync<{
-      cash: number;
-      ovo: number;
-      seabank: number;
-    }>(`
-      SELECT cash, ovo, seabank
-      FROM saldo
-      WHERE id = 1
-    `);
-
-    if (!saldo) {
-      Alert.alert(
-        'Saldo tidak ditemukan',
-        'Data saldo belum tersedia.'
-      );
-      return;
-    }
-
-    const saldoAkun = saldo[akunBayar];
-
-    if (saldoAkun < harga) {
-      Alert.alert(
-        'Saldo tidak cukup',
-        `Saldo ${
-          akunBayar === 'cash'
-            ? 'Cash'
-            : akunBayar === 'ovo'
-              ? 'OVO'
-              : 'SeaBank'
-        } tidak cukup untuk membayar oli.`
-      );
-      return;
-    }
-
-    const namaAkun =
+if (saldoAkun < harga) {
+  Alert.alert(
+    'Saldo tidak cukup',
+    `Saldo ${
       akunBayar === 'cash'
         ? 'Cash'
         : akunBayar === 'ovo'
           ? 'OVO'
-          : 'SeaBank';
+          : 'SeaBank'
+    } tidak cukup untuk membayar oli.`
+  );
+  return;
+}
 
-    const tanggal = new Date()
-      .toISOString()
-      .slice(0, 10);
+const namaAkun =
+  akunBayar === 'cash'
+    ? 'Cash'
+    : akunBayar === 'ovo'
+      ? 'OVO'
+      : 'SeaBank';
 
-    const kmBerikutnya =
-      kmBaru + intervalKm;
+const tanggal = new Date()
+  .toISOString()
+  .slice(0, 10);
 
-    db.withTransactionSync(() => {
-      // Kurangi saldo akun pembayaran
-      db.runSync(
-        `
-        UPDATE saldo
-        SET ${akunBayar} = ${akunBayar} - ?
-        WHERE id = 1
-        `,
-        [harga]
-      );
+const kmBerikutnya =
+  kmBaru + intervalKm;
 
-      // Update KM motor
-      db.runSync(
-        `
-        UPDATE motor
-        SET
-          km_sekarang = ?,
-          km_terakhir_update = ?,
-          tanggal_update_terakhir = ?
-        WHERE id = 1
-        `,
-        [kmBaru, kmBaru, tanggal]
-      );
+db.withTransactionSync(() => {
+  // Kurangi saldo akun pembayaran
+  db.runSync(
+    `
+    UPDATE saldo
+    SET ${akunBayar} = ${akunBayar} - ?
+    WHERE id = 1
+    `,
+    [harga]
+  );
 
-      // Simpan riwayat KM
-      db.runSync(
-        `
-        INSERT INTO riwayat_km
-        (
-          tanggal,
-          km
-        )
-        VALUES (?, ?)
-        `,
-        [tanggal, kmBaru]
-      );
+  // Update KM motor
+  db.runSync(
+    `
+    UPDATE motor
+    SET
+      km_sekarang = ?,
+      km_terakhir_update = ?,
+      tanggal_update_terakhir = ?
+    WHERE id = 1
+    `,
+    [kmBaru, kmBaru, tanggal]
+  );
 
-      // Simpan penggantian oli
-      db.runSync(
-        `
-        INSERT INTO oli
-        (
-          tanggal,
-          km_penggantian,
-          nominal,
-          interval_km,
-          km_berikutnya
-        )
-        VALUES (?, ?, ?, ?, ?)
-        `,
-        [
-          tanggal,
-          kmBaru,
-          harga,
-          intervalKm,
-          kmBerikutnya,
-        ]
-      );
+  // Simpan riwayat KM
+  db.runSync(
+    `
+    INSERT INTO riwayat_km
+    (
+      tanggal,
+      km
+    )
+    VALUES (?, ?)
+    `,
+    [tanggal, kmBaru]
+  );
 
-      // Simpan transaksi pengeluaran
-      db.runSync(
-        `
-        INSERT INTO transaksi
-        (
-          tanggal,
-          jenis,
-          subjenis,
-          keterangan,
-          nominal
-        )
-        VALUES (?, ?, ?, ?, ?)
-        `,
-        [
-          tanggal,
-          'pengeluaran',
-          'oli',
-          `Penggantian oli mesin + gardan - ${namaAkun}`,
-          harga,
-        ]
-      );
-    });
+  // Simpan penggantian oli
+  db.runSync(
+    `
+    INSERT INTO oli
+    (
+      tanggal,
+      km_penggantian,
+      nominal,
+      interval_km,
+      km_berikutnya
+    )
+    VALUES (?, ?, ?, ?, ?)
+    `,
+    [
+      tanggal,
+      kmBaru,
+      harga,
+      intervalKm,
+      kmBerikutnya,
+    ]
+  );
 
-    setKmPenggantian('');
-    setNominal('');
+  // Simpan transaksi pengeluaran
+  db.runSync(
+    `
+    INSERT INTO transaksi
+    (
+      tanggal,
+      jenis,
+      subjenis,
+      keterangan,
+      nominal,
+      deskripsi
+    )
+    VALUES (?, ?, ?, ?, ?, ?)
+    `,
+    [
+      tanggal,
+      'pengeluaran',
+      'oli',
+      `Pembelian oli - ${namaAkun}`,
+      harga,
+      `Penggantian oli mesin + gardan di KM ${formatKM(kmBaru)}`,
+    ]
+  );
+});
 
-    Alert.alert(
-      'Berhasil',
-      `Penggantian oli mesin + gardan dicatat pada KM ${formatKM(
-        kmBaru
-      )}.\n\nPenggantian berikutnya: KM ${formatKM(
-        kmBerikutnya
-      )}.`
-    );
+setKmPenggantian('');
+setNominal('');
 
-    loadData();
-  }
+Alert.alert(
+  'Berhasil',
+  `Penggantian oli mesin + gardan dicatat pada KM ${formatKM(
+    kmBaru
+  )}.\n\nPenggantian berikutnya: KM ${formatKM(
+    kmBerikutnya
+  )}.`
+);
 
-  const sisaKm = oliTerakhir
-    ? oliTerakhir.km_berikutnya - kmSekarang
-    : null;
+loadData();
 
-  const sudahWaktunya =
-    sisaKm !== null && sisaKm <= 0;
 
-  const mendekati =
-    sisaKm !== null &&
-    sisaKm > 0 &&
-    sisaKm <= 300;
+}
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
+const sisaKm = oliTerakhir
+? oliTerakhir.km_berikutnya - kmSekarang
+: null;
 
-        <View style={styles.header}>
-          <Pressable onPress={() => router.back()}>
-            <Text style={styles.back}>‹</Text>
-          </Pressable>
+const sudahWaktunya =
+sisaKm !== null &&
+sisaKm <= 0;
 
-          <View>
-            <Text style={styles.title}>
-              Oli Motor
-            </Text>
+const mendekati =
+sisaKm !== null &&
+sisaKm > 0 &&
+sisaKm <= 300;
 
-            <Text style={styles.subtitle}>
-              Oli mesin + oli gardan
-            </Text>
-          </View>
-        </View>
+return ( <SafeAreaView style={styles.container}> <ScrollView
+     contentContainerStyle={styles.content}
+     showsVerticalScrollIndicator={false}
+   >
+{/* HEADER */} <View style={styles.header}>
+<Pressable
+onPress={() => router.back()}
+hitSlop={10}
+> <Text style={styles.back}>‹</Text> </Pressable>
 
-        <View style={styles.currentCard}>
-          <Text style={styles.label}>
-            KM MOTOR SAAT INI
-          </Text>
 
-          <Text style={styles.currentKm}>
-            {formatKM(kmSekarang)} KM
-          </Text>
+      <View>
+        <Text style={styles.title}>
+          Oli Mesin + Gardan
+        </Text>
 
-          <Text style={styles.info}>
-            KM diambil dari data motor.
-          </Text>
-        </View>
+        <Text style={styles.subtitle}>
+          Catat penggantian dan jadwal oli
+        </Text>
+      </View>
+    </View>
 
-        {oliTerakhir ? (
-          <View style={styles.statusCard}>
+    {/* KM MOTOR */}
+    <View style={styles.currentSection}>
+      <Text style={styles.currentLabel}>
+        Kilometer motor saat ini
+      </Text>
 
-            <Text style={styles.statusTitle}>
-              Status Oli
-            </Text>
+      <Text style={styles.currentKm}>
+        {formatKM(kmSekarang)} KM
+      </Text>
+    </View>
 
-            <Text style={styles.statusText}>
+    {/* STATUS OLI */}
+    <View style={styles.statusSection}>
+      <View style={styles.sectionHeader}>
+        <Ionicons
+          name="water-outline"
+          size={19}
+          color="#4F7298"
+        />
+
+        <Text style={styles.sectionTitle}>
+          Status Oli
+        </Text>
+      </View>
+
+      {oliTerakhir ? (
+        <View style={styles.statusInfo}>
+          <View style={styles.statusColumn}>
+            <Text style={styles.infoLabel}>
               Penggantian terakhir
             </Text>
 
-            <Text style={styles.statusKm}>
+            <Text style={styles.infoValue}>
               KM {formatKM(
                 oliTerakhir.km_penggantian
               )}
             </Text>
+          </View>
 
-            <Text style={styles.nextText}>
-              Target berikutnya
+          <View style={styles.statusColumn}>
+            <Text style={styles.infoLabel}>
+              Penggantian berikutnya
             </Text>
 
-            <Text style={styles.nextKm}>
+            <Text style={styles.infoValue}>
               KM {formatKM(
                 oliTerakhir.km_berikutnya
               )}
             </Text>
-
-            {sudahWaktunya && (
-              <View style={styles.warningBox}>
-                <Text style={styles.warningTitle}>
-                  PERLU GANTI OLI
-                </Text>
-
-                <Text style={styles.warningText}>
-                  Jadwal penggantian oli sudah tercapai.
-                </Text>
-              </View>
-            )}
-
-            {mendekati && (
-              <View style={styles.nearBox}>
-                <Text style={styles.nearTitle}>
-                  SEGERA GANTI OLI
-                </Text>
-
-                <Text style={styles.nearText}>
-                  Sisa sekitar {formatKM(sisaKm!)} KM.
-                </Text>
-              </View>
-            )}
-
-            {!sudahWaktunya &&
-              !mendekati &&
-              sisaKm !== null && (
-                <View style={styles.normalBox}>
-                  <Text style={styles.normalText}>
-                    Sisa {formatKM(sisaKm)} KM
-                  </Text>
-                </View>
-              )}
-
           </View>
-        ) : (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>
-              Belum ada data oli
+        </View>
+      ) : (
+        <Text style={styles.emptyInfo}>
+          Belum ada data penggantian oli.
+        </Text>
+      )}
+
+      {sudahWaktunya && (
+        <View style={styles.warningBox}>
+          <Ionicons
+            name="warning-outline"
+            size={18}
+            color="#B42318"
+          />
+
+          <View style={styles.messageContent}>
+            <Text style={styles.warningTitle}>
+              Perlu ganti oli
             </Text>
 
-            <Text style={styles.emptyText}>
-              Catat penggantian oli pertama Anda di bawah.
+            <Text style={styles.warningText}>
+              Jadwal penggantian oli sudah tercapai.
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {mendekati && (
+        <View style={styles.nearBox}>
+          <Ionicons
+            name="alert-circle-outline"
+            size={18}
+            color="#8A5A00"
+          />
+
+          <View style={styles.messageContent}>
+            <Text style={styles.nearTitle}>
+              Segera ganti oli
+            </Text>
+
+            <Text style={styles.nearText}>
+              Sisa sekitar {formatKM(sisaKm!)} KM.
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {!sudahWaktunya &&
+        !mendekati &&
+        sisaKm !== null && (
+          <View style={styles.normalBox}>
+            <Ionicons
+              name="checkmark-circle-outline"
+              size={18}
+              color="#4F7298"
+            />
+
+            <Text style={styles.normalText}>
+              Sisa {formatKM(sisaKm)} KM
             </Text>
           </View>
         )}
+    </View>
 
-        <View style={styles.formCard}>
-          <Text style={styles.formTitle}>
-            Catat Penggantian Oli
-          </Text>
+    {/* FORM */}
+    <View style={styles.formSection}>
+      <View style={styles.sectionHeader}>
+        <Ionicons
+          name="create-outline"
+          size={19}
+          color="#4F7298"
+        />
 
-          <Text style={styles.formInfo}>
-            Masukkan KM motor saat penggantian oli.
-            KM akan menjadi KM motor terbaru.
-          </Text>
+        <Text style={styles.sectionTitle}>
+          Catat Penggantian Oli
+        </Text>
+      </View>
 
-          <Text style={styles.label}>
-            KM saat penggantian
-          </Text>
+      <Text style={styles.formInfo}>
+        Masukkan KM motor saat penggantian oli.
+        {'\n'}
+        KM tersebut akan menjadi KM motor terbaru.
+      </Text>
 
-          <TextInput
-            style={styles.input}
-            placeholder={`Contoh: ${formatKM(kmSekarang)}`}
-            keyboardType="decimal-pad"
-            value={kmPenggantian}
-            onChangeText={setKmPenggantian}
-          />
+      <Text style={styles.inputLabel}>
+        KM saat penggantian
+      </Text>
 
-          <Text style={styles.label}>
-            Harga oli
-          </Text>
+      <TextInput
+        style={styles.input}
+        placeholder={`Contoh: ${formatKM(kmSekarang)}`}
+        placeholderTextColor="#9AA0A8"
+        keyboardType="decimal-pad"
+        value={kmPenggantian}
+        onChangeText={setKmPenggantian}
+      />
 
-          <TextInput
-            style={styles.input}
-            placeholder="Contoh: 75000"
-            keyboardType="numeric"
-            value={nominal}
-            onChangeText={setNominal}
-          />
+      <Text style={styles.inputLabel}>
+        Harga oli
+      </Text>
 
-          <Text style={styles.label}>
-            Interval penggantian (KM)
-          </Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Contoh: 75000"
+        placeholderTextColor="#9AA0A8"
+        keyboardType="numeric"
+        value={nominal}
+        onChangeText={setNominal}
+      />
 
-          <TextInput
-            style={styles.input}
-            placeholder="Contoh: 2000"
-            keyboardType="numeric"
-            value={interval}
-            onChangeText={setInterval}
-          />
-          <Text style={styles.label}>
-            Bayar dari
-          </Text>
+      <Text style={styles.inputLabel}>
+        Interval penggantian (KM)
+      </Text>
 
-          <View style={styles.accountRow}>
-            {[
-              { key: 'cash', label: 'Cash' },
-              { key: 'ovo', label: 'OVO' },
-              { key: 'seabank', label: 'SeaBank' },
-            ].map((akun) => (
-              <Pressable
-                key={akun.key}
+      <TextInput
+        style={styles.input}
+        placeholder="Contoh: 2000"
+        placeholderTextColor="#9AA0A8"
+        keyboardType="numeric"
+        value={interval}
+        onChangeText={setInterval}
+      />
+
+      <Text style={styles.inputLabel}>
+        Bayar dari
+      </Text>
+
+      <View style={styles.accountRow}>
+        {[
+          { key: 'cash', label: 'Cash' },
+          { key: 'ovo', label: 'OVO' },
+          { key: 'seabank', label: 'SeaBank' },
+        ].map((akun) => {
+          const aktif =
+            akunBayar === akun.key;
+
+          return (
+            <Pressable
+              key={akun.key}
+              style={[
+                styles.accountButton,
+                aktif &&
+                  styles.accountButtonActive,
+              ]}
+              onPress={() =>
+                setAkunBayar(
+                  akun.key as
+                    | 'cash'
+                    | 'ovo'
+                    | 'seabank'
+                )
+              }
+            >
+              <Text
                 style={[
-                  styles.accountButton,
-                  akunBayar === akun.key &&
-                    styles.accountButtonActive,
+                  styles.accountButtonText,
+                  aktif &&
+                    styles.accountButtonTextActive,
                 ]}
-                onPress={() =>
-                  setAkunBayar(
-                    akun.key as 'cash' | 'ovo' | 'seabank'
-                  )
-                }
               >
-                <Text
-                  style={[
-                    styles.accountButtonText,
-                    akunBayar === akun.key &&
-                      styles.accountButtonTextActive,
-                  ]}
-                >
-                  {akun.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+                {akun.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
 
-          <Pressable
-            style={styles.button}
-            onPress={simpanOli}
-          >
-            <Text style={styles.buttonText}>
-              Simpan Penggantian Oli
-            </Text>
-          </Pressable>
-        </View>
+      <Pressable
+        style={styles.button}
+        onPress={simpanOli}
+      >
+        <Text style={styles.buttonText}>
+          Simpan Penggantian Oli
+        </Text>
+      </Pressable>
+    </View>
+
+    {/* RIWAYAT */}
+    <View style={styles.historyHeader}>
+      <View style={styles.sectionHeader}>
+        <Ionicons
+          name="time-outline"
+          size={19}
+          color="#4F7298"
+        />
 
         <Text style={styles.sectionTitle}>
           Riwayat Oli
         </Text>
+      </View>
+    </View>
 
-        {riwayat.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>
-              Belum ada riwayat penggantian oli.
-            </Text>
-          </View>
-        ) : (
-          riwayat.map((item) => (
-            <View
-              key={item.id}
-              style={styles.historyCard}
-            >
-              <View style={styles.historyTop}>
-                <Text style={styles.historyTitle}>
-                  Oli mesin + gardan
-                </Text>
-
-                <Text style={styles.historyDate}>
-                  {item.tanggal}
-                </Text>
-              </View>
-
-              <Text style={styles.historyKm}>
-                Diganti pada KM {formatKM(
-                  item.km_penggantian
-                )}
+    {riwayat.length === 0 ? (
+      <View style={styles.emptyHistory}>
+        <Text style={styles.emptyText}>
+          Belum ada riwayat penggantian oli.
+        </Text>
+      </View>
+    ) : (
+      <View style={styles.historyList}>
+        {riwayat.map((item) => (
+          <View
+            key={item.id}
+            style={styles.historyItem}
+          >
+            <View style={styles.historyLeft}>
+              <Text style={styles.historyTitle}>
+                Oli mesin + gardan
               </Text>
 
+              <Text style={styles.historyDate}>
+                {item.tanggal}
+              </Text>
+
+              <Text style={styles.historyKm}>
+                Diganti pada KM{' '}
+                {formatKM(item.km_penggantian)}
+              </Text>
+            </View>
+
+            <View style={styles.historyRight}>
               <Text style={styles.historyPrice}>
                 {rupiah(item.nominal)}
               </Text>
 
               <Text style={styles.historyNext}>
-                Berikutnya KM {formatKM(
-                  item.km_berikutnya
-                )}
+                Berikutnya KM{' '}
+                {formatKM(item.km_berikutnya)}
               </Text>
             </View>
-          ))
-        )}
+          </View>
+        ))}
+      </View>
+    )}
+  </ScrollView>
+</SafeAreaView>
 
-      </ScrollView>
-    </SafeAreaView>
-  );
+
+);
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F7FA',
-  },
+container: {
+flex: 1,
+backgroundColor: '#F8F9FB',
+},
 
-  content: {
-    padding: 20,
-    paddingBottom: 40,
-  },
+content: {
+padding: 20,
+paddingBottom: 40,
+},
 
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 25,
-  },
+header: {
+flexDirection: 'row',
+alignItems: 'center',
+marginBottom: 24,
+},
 
-  back: {
-    fontSize: 42,
-    lineHeight: 42,
-    marginRight: 15,
-    color: '#333',
-  },
+back: {
+fontSize: 38,
+lineHeight: 38,
+marginRight: 12,
+color: '#333',
+},
 
-  title: {
-    fontSize: 30,
-    fontWeight: '800',
-  },
+title: {
+fontSize: 22,
+fontWeight: '700',
+color: '#222',
+},
 
-  subtitle: {
-    marginTop: 4,
-    color: '#68707D',
-    fontSize: 14,
-  },
+subtitle: {
+marginTop: 1,
+color: '#68707D',
+fontSize: 12,
+},
 
-  currentCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 22,
-    padding: 24,
-    marginBottom: 15,
-    elevation: 3,
-  },
+currentSection: {
+alignItems: 'center',
+marginBottom: 30,
+},
 
-  label: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#777',
-    marginBottom: 8,
-  },
+currentLabel: {
+fontSize: 13,
+fontWeight: '600',
+color: '#737A85',
+},
 
-  currentKm: {
-    fontSize: 32,
-    fontWeight: '800',
-  },
+currentKm: {
+fontSize: 30,
+fontWeight: '800',
+color: '#222',
+marginTop: 6,
+},
 
-  info: {
-    marginTop: 6,
-    fontSize: 12,
-    color: '#888',
-  },
+statusSection: {
+marginBottom: 30,
+},
 
-  statusCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 22,
-    marginBottom: 15,
-    elevation: 2,
-  },
+sectionHeader: {
+flexDirection: 'row',
+alignItems: 'center',
+justifyContent: 'center',
+marginBottom: 12,
+},
 
-  statusTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    marginBottom: 15,
-  },
+sectionTitle: {
+fontSize: 16,
+fontWeight: '800',
+color: '#222',
+marginLeft: 7,
+},
 
-  statusText: {
-    fontSize: 13,
-    color: '#777',
-  },
+statusInfo: {
+flexDirection: 'row',
+gap: 20,
+},
 
-  statusKm: {
-    marginTop: 4,
-    fontSize: 18,
-    fontWeight: '800',
-  },
+statusColumn: {
+flex: 1,
+alignItems: 'center',
+},
 
-  nextText: {
-    marginTop: 15,
-    fontSize: 13,
-    color: '#777',
-  },
+infoLabel: {
+fontSize: 11,
+color: '#737A85',
+textAlign: 'center',
+},
 
-  nextKm: {
-    marginTop: 4,
-    fontSize: 24,
-    fontWeight: '800',
-  },
+infoValue: {
+fontSize: 14,
+fontWeight: '800',
+color: '#4F7298',
+marginTop: 4,
+textAlign: 'center',
+},
 
-  warningBox: {
-    marginTop: 18,
-    padding: 15,
-    borderRadius: 14,
-    backgroundColor: '#FFE9E6',
-  },
+emptyInfo: {
+textAlign: 'center',
+fontSize: 12,
+color: '#8A929D',
+},
 
-  warningTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#B42318',
-  },
+warningBox: {
+flexDirection: 'row',
+alignItems: 'center',
+backgroundColor: '#FCF0F0',
+borderRadius: 12,
+padding: 12,
+marginTop: 14,
+},
 
-  warningText: {
-    marginTop: 5,
-    color: '#8B2C25',
-    fontSize: 13,
-  },
+warningTitle: {
+fontSize: 13,
+fontWeight: '800',
+color: '#B42318',
+},
 
-  nearBox: {
-    marginTop: 18,
-    padding: 15,
-    borderRadius: 14,
-    backgroundColor: '#FFF4D6',
-  },
+warningText: {
+fontSize: 11,
+color: '#8B2C25',
+marginTop: 2,
+},
 
-  nearTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#8A5A00',
-  },
+nearBox: {
+flexDirection: 'row',
+alignItems: 'center',
+backgroundColor: '#FCF7E8',
+borderRadius: 12,
+padding: 12,
+marginTop: 14,
+},
 
-  nearText: {
-    marginTop: 5,
-    color: '#795200',
-    fontSize: 13,
-  },
+nearTitle: {
+fontSize: 13,
+fontWeight: '800',
+color: '#8A5A00',
+},
 
-  normalBox: {
-    marginTop: 18,
-    padding: 15,
-    borderRadius: 14,
-    backgroundColor: '#F0F2F5',
-  },
+nearText: {
+fontSize: 11,
+color: '#795200',
+marginTop: 2,
+},
 
-  normalText: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
+normalBox: {
+flexDirection: 'row',
+alignItems: 'center',
+justifyContent: 'center',
+backgroundColor: '#F2F6FC',
+borderRadius: 12,
+padding: 11,
+marginTop: 14,
+},
 
-  emptyCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 22,
-    marginBottom: 15,
-  },
+normalText: {
+fontSize: 12,
+fontWeight: '700',
+color: '#4F7298',
+marginLeft: 6,
+},
 
-  emptyTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-  },
+messageContent: {
+marginLeft: 9,
+flex: 1,
+},
 
-  emptyText: {
-    color: '#888',
-    fontSize: 13,
-    lineHeight: 19,
-  },
+formSection: {
+marginBottom: 30,
+},
 
-  formCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 25,
-  },
+formInfo: {
+textAlign: 'center',
+fontSize: 11,
+color: '#8A929D',
+lineHeight: 17,
+marginBottom: 18,
+},
 
-  formTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-  },
+inputLabel: {
+fontSize: 13,
+fontWeight: '700',
+color: '#30343A',
+marginBottom: 8,
+},
 
-  formInfo: {
-    marginTop: 6,
-    marginBottom: 18,
-    color: '#777',
-    fontSize: 12,
-    lineHeight: 18,
-  },
+input: {
+backgroundColor: '#F1F3F5',
+borderRadius: 12,
+paddingHorizontal: 15,
+paddingVertical: 13,
+fontSize: 16,
+color: '#222',
+marginBottom: 15,
+},
 
-  input: {
-    backgroundColor: '#F5F7FA',
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    marginBottom: 18,
-  },
+accountRow: {
+flexDirection: 'row',
+gap: 9,
+marginBottom: 18,
+},
 
-  button: {
-    backgroundColor: '#222',
-    borderRadius: 15,
-    paddingVertical: 15,
-    alignItems: 'center',
-  },
+accountButton: {
+flex: 1,
+backgroundColor: '#F1F3F5',
+borderRadius: 12,
+paddingVertical: 13,
+alignItems: 'center',
+borderWidth: 1,
+borderColor: '#E1E3E6',
+},
 
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800',
-  },
+accountButtonActive: {
+backgroundColor: '#E3EDF7',
+borderColor: '#9FBEDB',
+},
 
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    marginBottom: 12,
-  },
+accountButtonText: {
+fontSize: 13,
+fontWeight: '700',
+color: '#68707D',
+},
 
-  historyCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 17,
-    padding: 18,
-    marginBottom: 10,
-    elevation: 1,
-  },
+accountButtonTextActive: {
+color: '#4F7298',
+},
 
-  historyTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
+button: {
+backgroundColor: '#4F7298',
+borderRadius: 12,
+paddingVertical: 14,
+alignItems: 'center',
+},
 
-  historyTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-  },
+buttonText: {
+color: '#FFFFFF',
+fontSize: 14,
+fontWeight: '800',
+},
 
-  historyDate: {
-    fontSize: 12,
-    color: '#888',
-  },
+historyHeader: {
+marginBottom: 4,
+},
 
-  historyKm: {
-    marginTop: 10,
-    fontSize: 13,
-    color: '#555',
-  },
+historyList: {
+marginTop: 2,
+},
 
-  historyPrice: {
-    marginTop: 5,
-    fontSize: 16,
-    fontWeight: '800',
-  },
+historyItem: {
+flexDirection: 'row',
+alignItems: 'center',
+justifyContent: 'space-between',
+paddingVertical: 14,
+borderBottomWidth: 1,
+borderBottomColor: '#ECEEF1',
+},
 
-  historyNext: {
-    marginTop: 5,
-    fontSize: 12,
-    color: '#777',
-  },
+historyLeft: {
+flex: 1,
+paddingRight: 10,
+},
 
-  accountRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 18,
-  },
+historyRight: {
+alignItems: 'flex-end',
+maxWidth: 130,
+},
 
-  accountButton: {
-    flex: 1,
-    backgroundColor: '#F5F7FA',
-    borderRadius: 12,
-    paddingVertical: 13,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
+historyTitle: {
+fontSize: 13,
+fontWeight: '800',
+color: '#30343A',
+},
 
-  accountButtonActive: {
-    backgroundColor: '#222',
-    borderColor: '#222',
-  },
+historyDate: {
+fontSize: 10,
+color: '#8A929D',
+marginTop: 3,
+},
 
-  accountButtonText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#555',
-  },
+historyKm: {
+fontSize: 11,
+color: '#68707D',
+marginTop: 5,
+},
 
-  accountButtonTextActive: {
-    color: '#FFFFFF',
-  },
+historyPrice: {
+fontSize: 13,
+fontWeight: '800',
+color: '#4F7298',
+},
+
+historyNext: {
+fontSize: 10,
+color: '#8A929D',
+marginTop: 3,
+textAlign: 'right',
+},
+
+emptyHistory: {
+alignItems: 'center',
+paddingVertical: 20,
+},
+
+emptyText: {
+color: '#8A929D',
+fontSize: 12,
+},
 });

@@ -1,186 +1,213 @@
 import React, { useCallback, useState } from 'react';
 import {
-  SafeAreaView,
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  ScrollView,
+SafeAreaView,
+View,
+Text,
+StyleSheet,
+Pressable,
+ScrollView,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import db from '../database/database';
 
 type Ringkasan = {
-  pendapatan: number;
-  pengeluaran: number;
-  jumlah_pendapatan: number;
-  jumlah_pengeluaran: number;
-  jumlah_transfer: number;
+pendapatan: number;
+pengeluaran: number;
+jumlah_pendapatan: number;
+jumlah_pengeluaran: number;
+jumlah_transfer: number;
 };
 
 function rupiah(n: number) {
-  return `Rp${n.toLocaleString('id-ID')}`;
+return `Rp${n.toLocaleString('id-ID')}`;
 }
 
 export default function RingkasanScreen() {
-  const router = useRouter();
+const router = useRouter();
 
-  const [data, setData] = useState<Ringkasan>({
-    pendapatan: 0,
-    pengeluaran: 0,
-    jumlah_pendapatan: 0,
-    jumlah_pengeluaran: 0,
-    jumlah_transfer: 0,
-  });
+const [data, setData] = useState<Ringkasan>({
+pendapatan: 0,
+pengeluaran: 0,
+jumlah_pendapatan: 0,
+jumlah_pengeluaran: 0,
+jumlah_transfer: 0,
+});
 
-  const [bulan, setBulan] = useState('');
+const [bulan, setBulan] = useState('');
 
-  const loadData = useCallback(() => {
-    const sekarang = new Date();
+const loadData = useCallback(() => {
+const sekarang = new Date();
 
-    const tahun = sekarang.getFullYear();
-    const nomorBulan = String(
-      sekarang.getMonth() + 1
-    ).padStart(2, '0');
 
-    const bulanSekarang = `${tahun}-${nomorBulan}`;
+const tahun = sekarang.getFullYear();
 
-    const hasil = db.getFirstSync<{
-      pendapatan: number | null;
-      pengeluaran: number | null;
-      jumlah_pendapatan: number;
-      jumlah_pengeluaran: number;
-      jumlah_transfer: number;
-    }>(
-      `
-      SELECT
-        COALESCE(
-          SUM(
-            CASE
-              WHEN jenis = 'pendapatan'
-              THEN nominal
-              ELSE 0
-            END
-          ),
-          0
-        ) AS pendapatan,
+const nomorBulan = String(
+  sekarang.getMonth() + 1
+).padStart(2, '0');
 
-        COALESCE(
-          SUM(
-            CASE
-              WHEN jenis = 'pengeluaran'
-              THEN nominal
-              ELSE 0
-            END
-          ),
-          0
-        ) AS pengeluaran,
+const bulanSekarang = `${tahun}-${nomorBulan}`;
 
-        COUNT(
-          CASE
-            WHEN jenis = 'pendapatan'
-            THEN 1
-          END
-        ) AS jumlah_pendapatan,
+const hasil = db.getFirstSync<{
+  pendapatan: number | null;
+  pengeluaran: number | null;
+  jumlah_pendapatan: number;
+  jumlah_pengeluaran: number;
+  jumlah_transfer: number;
+}>(
+  `
+  SELECT
+    COALESCE(
+      SUM(
+        CASE
+          WHEN jenis = 'pendapatan'
+          THEN nominal
+          ELSE 0
+        END
+      ),
+      0
+    ) AS pendapatan,
 
-        COUNT(
-          CASE
-            WHEN jenis = 'pengeluaran'
-            THEN 1
-          END
-        ) AS jumlah_pengeluaran,
+    COALESCE(
+      SUM(
+        CASE
+          WHEN jenis = 'pengeluaran'
+          THEN nominal
+          ELSE 0
+        END
+      ),
+      0
+    ) AS pengeluaran,
 
-        COUNT(
-          CASE
-            WHEN jenis = 'transfer'
-            THEN 1
-          END
-        ) AS jumlah_transfer
+    COUNT(
+      CASE
+        WHEN jenis = 'pendapatan'
+        THEN 1
+      END
+    ) AS jumlah_pendapatan,
 
-      FROM transaksi
+    COUNT(
+      CASE
+        WHEN jenis = 'pengeluaran'
+        THEN 1
+      END
+    ) AS jumlah_pengeluaran,
 
-      WHERE tanggal LIKE ?
-      `,
-      [`${bulanSekarang}%`]
-    );
+    COUNT(
+      CASE
+        WHEN jenis = 'transfer'
+        THEN 1
+      END
+    ) AS jumlah_transfer
 
-    setData({
-      pendapatan: hasil?.pendapatan ?? 0,
-      pengeluaran: hasil?.pengeluaran ?? 0,
-      jumlah_pendapatan: hasil?.jumlah_pendapatan ?? 0,
-      jumlah_pengeluaran: hasil?.jumlah_pengeluaran ?? 0,
-      jumlah_transfer: hasil?.jumlah_transfer ?? 0,
-    });
+  FROM transaksi
 
-    const namaBulan = sekarang.toLocaleDateString(
-      'id-ID',
-      {
-        month: 'long',
-        year: 'numeric',
-      }
-    );
+  WHERE tanggal LIKE ?
+  `,
+  [`${bulanSekarang}%`]
+);
 
-    setBulan(namaBulan);
-  }, []);
+setData({
+  pendapatan: hasil?.pendapatan ?? 0,
+  pengeluaran: hasil?.pengeluaran ?? 0,
+  jumlah_pendapatan: hasil?.jumlah_pendapatan ?? 0,
+  jumlah_pengeluaran: hasil?.jumlah_pengeluaran ?? 0,
+  jumlah_transfer: hasil?.jumlah_transfer ?? 0,
+});
 
-  useFocusEffect(
-    useCallback(() => {
-      loadData();
-    }, [loadData])
-  );
+const namaBulan = sekarang.toLocaleDateString(
+  'id-ID',
+  {
+    month: 'long',
+    year: 'numeric',
+  }
+);
 
-  const selisih =
-    data.pendapatan - data.pengeluaran;
+setBulan(namaBulan);
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
 
-        <View style={styles.header}>
-          <Pressable onPress={() => router.back()}>
-            <Text style={styles.back}>‹</Text>
-          </Pressable>
+}, []);
 
-          <View>
-            <Text style={styles.title}>
-              Ringkasan
-            </Text>
+useFocusEffect(
+useCallback(() => {
+loadData();
+}, [loadData])
+);
 
-            <Text style={styles.subtitle}>
-              Ringkasan keuangan bulan {bulan}
-            </Text>
-          </View>
-        </View>
+// Pendapatan bersih
+const selisih =
+data.pendapatan - data.pengeluaran;
 
-        <View style={styles.mainCard}>
-          <Text style={styles.mainLabel}>
-            HASIL BULAN INI
+// Warna pendapatan bersih
+const warnaBersih =
+selisih > 0
+? '#4E8A67'
+: selisih < 0
+? '#B85C5C'
+: '#343A42';
+
+return (
+  <SafeAreaView style={styles.container}>
+    <ScrollView
+      contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
+      >
+        {/* HEADER */} 
+      <View style={styles.header}>
+        <Pressable onPress={() => router.back()} 
+        style={styles.backButton}
+        >
+          <Text style={styles.back}>‹</Text>
+        </Pressable>
+        <View>
+          <Text style={styles.title}>
+            Ringkasan
           </Text>
 
-          <Text
-            style={[
-              styles.mainValue,
-              selisih < 0 && styles.negative,
-            ]}
-          >
-            {selisih >= 0 ? '+' : ''}
-            {rupiah(selisih)}
-          </Text>
-
-          <Text style={styles.mainInfo}>
-            Pendapatan dikurangi pengeluaran
+          <Text style={styles.subtitle}>
+            Ringkasan keuangan bulan {bulan}
           </Text>
         </View>
+      </View>
 
-        <View style={styles.card}>
-          <View>
-            <Text style={styles.cardTitle}>
-              Total Pendapatan
-            </Text>
+      {/* PENDAPATAN BERSIH */}
+      <View style={styles.netSection}>
+        <Text style={styles.netLabel}>
+          Pendapatan bersih
+        </Text>
 
-            <Text style={styles.cardCount}>
-              {data.jumlah_pendapatan} transaksi
-            </Text>
+        <Text
+          style={[
+            styles.netValue,
+            {
+              color: warnaBersih,
+            },
+          ]}
+        >
+          {selisih > 0 ? '+' : ''}
+          {rupiah(selisih)}
+        </Text>
+      </View>
+
+      {/* RINGKASAN PENDAPATAN */}
+      <View style={styles.summarySection}>
+        <View style={styles.summaryRow}>
+          <View style={styles.summaryLeft}>
+            <Ionicons
+              name="arrow-down-circle-outline"
+              size={21}
+              color="#4E8A67"
+            />
+
+            <View>
+              <Text style={styles.summaryTitle}>
+                Pendapatan
+              </Text>
+
+              <Text style={styles.summaryCount}>
+                {data.jumlah_pendapatan} transaksi
+              </Text>
+            </View>
           </View>
 
           <Text style={styles.income}>
@@ -188,15 +215,24 @@ export default function RingkasanScreen() {
           </Text>
         </View>
 
-        <View style={styles.card}>
-          <View>
-            <Text style={styles.cardTitle}>
-              Total Pengeluaran
-            </Text>
+        {/* RINGKASAN PENGELUARAN */}
+        <View style={styles.summaryRow}>
+          <View style={styles.summaryLeft}>
+            <Ionicons
+              name="arrow-up-circle-outline"
+              size={21}
+              color="#B85C5C"
+            />
 
-            <Text style={styles.cardCount}>
-              {data.jumlah_pengeluaran} transaksi
-            </Text>
+            <View>
+              <Text style={styles.summaryTitle}>
+                Pengeluaran
+              </Text>
+
+              <Text style={styles.summaryCount}>
+                {data.jumlah_pengeluaran} transaksi
+              </Text>
+            </View>
           </View>
 
           <Text style={styles.expense}>
@@ -204,159 +240,185 @@ export default function RingkasanScreen() {
           </Text>
         </View>
 
-        <View style={styles.card}>
-          <View>
-            <Text style={styles.cardTitle}>
-              Transfer
-            </Text>
+        {/* RINGKASAN TRANSFER */}
+        <View style={styles.summaryRow}>
+          <View style={styles.summaryLeft}>
+            <Ionicons
+              name="swap-horizontal-outline"
+              size={21}
+              color="#5B7FA5"
+            />
 
-            <Text style={styles.cardCount}>
-              Perpindahan antar akun
-            </Text>
+            <View>
+              <Text style={styles.summaryTitle}>
+                Transfer
+              </Text>
+
+              <Text style={styles.summaryCount}>
+                Perpindahan antar akun
+              </Text>
+            </View>
           </View>
 
           <Text style={styles.transfer}>
             {data.jumlah_transfer} transaksi
           </Text>
         </View>
+      </View>
 
-        <View style={styles.infoCard}>
-          <Text style={styles.infoTitle}>
-            Catatan
-          </Text>
+      {/* CATATAN */}
+      <View style={styles.noteSection}>
+        <Text style={styles.noteTitle}>
+          Catatan
+        </Text>
 
-          <Text style={styles.infoText}>
-            Transfer tidak dihitung sebagai pendapatan
-            atau pengeluaran karena hanya memindahkan
-            saldo antar akun.
-          </Text>
-        </View>
+        <Text style={styles.noteText}>
+          Transfer tidak dihitung sebagai pendapatan
+          atau pengeluaran karena hanya memindahkan
+          saldo antar akun.
+        </Text>
+      </View>
+    </ScrollView>
+  </SafeAreaView>
+);
 
-      </ScrollView>
-    </SafeAreaView>
-  );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F7FA',
-  },
+/* CONTAINER */
 
-  content: {
-    padding: 20,
-    paddingBottom: 40,
-  },
+container: {
+flex: 1,
+backgroundColor: '#F8F9FB',
+},
 
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 25,
-  },
+content: {
+padding: 20,
+paddingBottom: 40,
+},
 
-  back: {
-    fontSize: 42,
-    lineHeight: 42,
-    marginRight: 15,
-    color: '#333',
-  },
+/* HEADER */
 
-  title: {
-    fontSize: 30,
-    fontWeight: '800',
-  },
+header: {
+flexDirection: 'row',
+alignItems: 'center',
+marginBottom: 30,
+},
 
-  subtitle: {
-    marginTop: 4,
-    color: '#68707D',
-    fontSize: 14,
-  },
+backButton: {
+marginRight: 12,
+paddingRight: 2,
+},
 
-  mainCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 22,
-    padding: 24,
-    marginBottom: 18,
-    elevation: 3,
-  },
+back: {
+fontSize: 38,
+lineHeight: 38,
+color: '#333B45',
+},
 
-  mainLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#777',
-  },
+title: {
+fontSize: 22,
+fontWeight: '700',
+color: '#20252B',
+},
 
-  mainValue: {
-    marginTop: 8,
-    fontSize: 32,
-    fontWeight: '800',
-  },
+subtitle: {
+marginTop: 3,
+fontSize: 12,
+color: '#7B838E',
+},
 
-  negative: {
-    color: '#B42318',
-  },
+/* PENDAPATAN BERSIH */
 
-  mainInfo: {
-    marginTop: 6,
-    fontSize: 13,
-    color: '#888',
-  },
+netSection: {
+alignItems: 'center',
+marginBottom: 34,
+},
 
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 20,
-    marginBottom: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    elevation: 2,
-  },
+netLabel: {
+fontSize: 13,
+fontWeight: '600',
+color: '#7B838E',
+},
 
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-  },
+netValue: {
+marginTop: 7,
+fontSize: 30,
+fontWeight: '700',
+},
 
-  cardCount: {
-    marginTop: 5,
-    fontSize: 12,
-    color: '#888',
-  },
+/* RINGKASAN */
 
-  income: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#16803C',
-  },
+summarySection: {
+marginBottom: 28,
+},
 
-  expense: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#B42318',
-  },
+summaryRow: {
+minHeight: 62,
+flexDirection: 'row',
+alignItems: 'center',
+justifyContent: 'space-between',
+},
 
-  transfer: {
-    fontSize: 14,
-    fontWeight: '800',
-  },
+summaryLeft: {
+flexDirection: 'row',
+alignItems: 'center',
+gap: 9,
+flex: 1,
+},
 
-  infoCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 20,
-    marginTop: 8,
-  },
+summaryTitle: {
+fontSize: 14,
+fontWeight: '600',
+color: '#343A42',
+},
 
-  infoTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-  },
+summaryCount: {
+marginTop: 3,
+fontSize: 11,
+color: '#969DA6',
+},
 
-  infoText: {
-    marginTop: 8,
-    fontSize: 13,
-    lineHeight: 20,
-    color: '#737A85',
-  },
+/* WARNA PENDAPATAN */
+
+income: {
+fontSize: 14,
+fontWeight: '700',
+color: '#4E8A67',
+},
+
+/* WARNA PENGELUARAN */
+
+expense: {
+fontSize: 14,
+fontWeight: '700',
+color: '#B85C5C',
+},
+
+/* WARNA TRANSFER */
+
+transfer: {
+fontSize: 12,
+fontWeight: '600',
+color: '#5B7FA5',
+},
+
+/* CATATAN */
+
+noteSection: {
+paddingTop: 4,
+},
+
+noteTitle: {
+fontSize: 13,
+fontWeight: '700',
+color: '#343A42',
+},
+
+noteText: {
+marginTop: 7,
+fontSize: 12,
+lineHeight: 18,
+color: '#8A919A',
+},
 });

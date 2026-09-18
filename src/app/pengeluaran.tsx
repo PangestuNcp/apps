@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+
 import {
   SafeAreaView,
   View,
@@ -8,8 +10,12 @@ import {
   TextInput,
   Alert,
   ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
+
 import { useRouter } from 'expo-router';
+
 import db from '../database/database';
 
 const akun = [
@@ -25,13 +31,64 @@ export default function PengeluaranScreen() {
 
   const [keterangan, setKeterangan] = useState('');
   const [nominal, setNominal] = useState('');
+  const [deskripsi, setDeskripsi] = useState('');
+  const [saranKeterangan, setSaranKeterangan] = useState<string[]>([]);
   const [akunDipilih, setAkunDipilih] =
     useState<AkunKey>('cash');
 
+  function cariSaranKeterangan(teks: string) {
+    const nilai = teks.trim();
+
+    if (!nilai) {
+      setSaranKeterangan([]);
+      return;
+    }
+
+    const hasil = db.getAllSync<{ keterangan: string }>(
+      `
+      SELECT DISTINCT keterangan
+      FROM transaksi
+      WHERE jenis = 'pengeluaran'
+        AND keterangan IS NOT NULL
+        AND TRIM(keterangan) != ''
+        AND LOWER(keterangan) LIKE LOWER(?)
+      ORDER BY keterangan COLLATE NOCASE ASC
+      LIMIT 5
+      `,
+      [`%${nilai}%`]
+    );
+
+    setSaranKeterangan(
+      hasil.map((item) => item.keterangan)
+    );
+  }
+
   function simpan() {
     const nilai = Number(nominal.replace(/\D/g, ''));
+    const keteranganInput = keterangan.trim();
+    const deskripsiInput = deskripsi.trim();
 
-    if (!keterangan.trim()) {
+    const keteranganLama =
+      db.getFirstSync<{ keterangan: string }>(
+        `
+        SELECT keterangan
+        FROM transaksi
+        WHERE jenis = 'pengeluaran'
+          AND keterangan IS NOT NULL
+          AND TRIM(keterangan) != ''
+          AND LOWER(TRIM(keterangan)) =
+              LOWER(TRIM(?))
+        ORDER BY id ASC
+        LIMIT 1
+        `,
+        [keteranganInput]
+      );
+
+    const keteranganFinal =
+      keteranganLama?.keterangan ??
+      keteranganInput;
+
+    if (!keteranganInput) {
       Alert.alert(
         'Data belum lengkap',
         'Masukkan keterangan pengeluaran.'
@@ -57,8 +114,9 @@ export default function PengeluaranScreen() {
 
     if (!saldoSekarang || saldoSekarang.saldo < nilai) {
       const namaAkun =
-        akun.find((item) => item.key === akunDipilih)?.label ??
-        'akun';
+        akun.find(
+          (item) => item.key === akunDipilih
+        )?.label ?? 'akun';
 
       Alert.alert(
         'Saldo tidak cukup',
@@ -80,14 +138,15 @@ export default function PengeluaranScreen() {
 
     db.runSync(
       `INSERT INTO transaksi
-       (tanggal, jenis, subjenis, keterangan, nominal)
-       VALUES (?, ?, ?, ?, ?)`,
+       (tanggal, jenis, subjenis, keterangan, nominal, deskripsi)
+       VALUES (?, ?, ?, ?, ?, ?)`,
       [
         tanggal,
         'pengeluaran',
         akunDipilih,
-        keterangan.trim(),
+        keteranganFinal,
         nilai,
+        deskripsiInput || null,
       ]
     );
 
@@ -103,89 +162,169 @@ export default function PengeluaranScreen() {
     );
   }
 
-  return (
+    return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
-
-        <View style={styles.header}>
-          <Pressable onPress={() => router.back()}>
-            <Text style={styles.back}>‹</Text>
-          </Pressable>
-
-          <View>
-            <Text style={styles.title}>
-              Pengeluaran
-            </Text>
-
-            <Text style={styles.subtitle}>
-              Catat pengeluaran Anda
-            </Text>
-          </View>
-        </View>
-
-        <Text style={styles.label}>
-          Keterangan
-        </Text>
-
-        <TextInput
-          style={styles.input}
-          placeholder="Contoh: Makan siang"
-          value={keterangan}
-          onChangeText={setKeterangan}
-        />
-
-        <Text style={styles.label}>
-          Nominal
-        </Text>
-
-        <TextInput
-          style={styles.input}
-          placeholder="Contoh: 25000"
-          keyboardType="numeric"
-          value={nominal}
-          onChangeText={setNominal}
-        />
-
-        <Text style={styles.label}>
-          Bayar dari
-        </Text>
-
-        <View style={styles.accountList}>
-          {akun.map((item) => (
-            <Pressable
-              key={item.key}
-              style={[
-                styles.accountButton,
-                akunDipilih === item.key &&
-                  styles.accountSelected,
-              ]}
-              onPress={() =>
-                setAkunDipilih(item.key)
-              }
-            >
-              <Text
-                style={[
-                  styles.accountText,
-                  akunDipilih === item.key &&
-                    styles.accountTextSelected,
-                ]}
-              >
-                {item.label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-
-        <Pressable
-          style={styles.saveButton}
-          onPress={simpan}
+      <KeyboardAvoidingView
+        style={styles.keyboardContainer}
+        behavior={
+          Platform.OS === 'ios'
+            ? 'padding'
+            : 'height'
+        }
+      >
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.saveText}>
-            Simpan Pengeluaran
-          </Text>
-        </Pressable>
+          {/* HEADER */}
+          <View style={styles.header}>
+            <Pressable
+              onPress={() => router.back()}
+              hitSlop={10}
+            >
+              <Text style={styles.back}>‹</Text>
+            </Pressable>
 
-      </ScrollView>
+            <View>
+              <Text style={styles.title}>
+                Pengeluaran
+              </Text>
+
+              <Text style={styles.subtitle}>
+                Catat pengeluaran Anda
+              </Text>
+            </View>
+          </View>
+
+          {/* KETERANGAN */}
+          <View style={styles.section}>
+            <View style={styles.sectionTitleRow}>
+              <Ionicons
+                name="receipt-outline"
+                size={18}
+                color="#B85C5C"
+              />
+
+              <Text style={styles.sectionTitle}>
+                Keterangan
+              </Text>
+            </View>
+
+            <TextInput
+              style={styles.input}
+              placeholder="Contoh: Makan"
+              placeholderTextColor="#9AA1AC"
+              value={keterangan}
+              onChangeText={(teks) => {
+                setKeterangan(teks);
+                cariSaranKeterangan(teks);
+              }}
+            />
+
+            {saranKeterangan.length > 0 && (
+              <View style={styles.suggestionBox}>
+                {saranKeterangan.map((saran) => (
+                  <Pressable
+                    key={saran}
+                    style={styles.suggestionItem}
+                    onPress={() => {
+                      setKeterangan(saran);
+                      setSaranKeterangan([]);
+                    }}
+                  >
+                    <Text style={styles.suggestionText}>
+                      {saran}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+          </View>
+
+          {/* NOMINAL */}
+          <View style={styles.section}>
+            <Text style={styles.inputLabel}>
+              Nominal
+            </Text>
+
+            <TextInput
+              style={styles.input}
+              placeholder="Rp5000"
+              placeholderTextColor="#9AA1AC"
+              keyboardType="numeric"
+              value={nominal}
+              onChangeText={setNominal}
+            />
+          </View>
+
+          {/* DESKRIPSI */}
+          <View style={styles.section}>
+            <Text style={styles.inputLabel}>
+              Deskripsi (opsional)
+            </Text>
+
+            <TextInput
+              style={styles.input}
+              placeholder="Contoh: Beli makan siang"
+              placeholderTextColor="#9AA1AC"
+              value={deskripsi}
+              onChangeText={setDeskripsi}
+            />
+          </View>
+
+          {/* BAYAR DARI */}
+          <View style={styles.section}>
+            <View style={styles.sectionTitleRow}>
+              <Ionicons
+                name="wallet-outline"
+                size={18}
+                color="#B85C5C"
+              />
+
+              <Text style={styles.sectionTitle}>
+                Bayar dari
+              </Text>
+            </View>
+
+            <View style={styles.accountRow}>
+              {akun.map((item) => (
+                <Pressable
+                  key={item.key}
+                  style={[
+                    styles.accountButton,
+                    akunDipilih === item.key &&
+                      styles.accountSelected,
+                  ]}
+                  onPress={() =>
+                    setAkunDipilih(item.key)
+                  }
+                >
+                  <Text
+                    style={[
+                      styles.accountText,
+                      akunDipilih === item.key &&
+                        styles.accountTextSelected,
+                    ]}
+                  >
+                    {item.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          {/* SIMPAN */}
+          <Pressable
+            style={styles.saveButton}
+            onPress={simpan}
+          >
+            <Text style={styles.saveText}>
+              Simpan Pengeluaran
+            </Text>
+          </Pressable>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -193,18 +332,22 @@ export default function PengeluaranScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F7FA',
+    backgroundColor: '#F8F9FB',
+  },
+
+  keyboardContainer: {
+    flex: 1,
   },
 
   content: {
     padding: 20,
-    paddingBottom: 40,
+    paddingBottom: 100,
   },
 
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: 24,
   },
 
   back: {
@@ -215,69 +358,116 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontSize: 30,
-    fontWeight: '800',
+    fontSize: 22,
+    fontWeight: '700',
   },
 
   subtitle: {
-    marginTop: 4,
+    marginTop: 2,
     color: '#68707D',
-    fontSize: 14,
+    fontSize: 12,
   },
 
-  label: {
-    marginTop: 8,
-    marginBottom: 8,
+  section: {
+    marginBottom: 18,
+  },
+
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 9,
+  },
+
+  sectionTitle: {
+    marginLeft: 7,
     fontSize: 14,
     fontWeight: '700',
+    color: '#252A31',
+  },
+
+  inputLabel: {
+    marginBottom: 7,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#555D68',
   },
 
   input: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 15,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    backgroundColor: '#F1F3F5',
+    borderRadius: 12,
+    paddingHorizontal: 15,
+    paddingVertical: 13,
     fontSize: 16,
-    marginBottom: 20,
+    color: '#252A31',
   },
 
-  accountList: {
+  accountRow: {
+    flexDirection: 'row',
     gap: 10,
-    marginBottom: 25,
   },
 
   accountButton: {
+    flex: 1,
+    minHeight: 46,
     backgroundColor: '#FFFFFF',
-    padding: 16,
-    borderRadius: 15,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#E1E4E8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
   },
 
   accountSelected: {
-    backgroundColor: '#222',
-    borderColor: '#222',
+    backgroundColor: '#F9EAEA',
+    borderColor: '#E5BDBD',
   },
 
   accountText: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#555D68',
   },
 
   accountTextSelected: {
-    color: '#FFFFFF',
+    color: '#B85C5C',
+    fontWeight: '700',
   },
 
   saveButton: {
-    backgroundColor: '#222',
-    borderRadius: 16,
-    paddingVertical: 16,
+    minHeight: 50,
+    backgroundColor: '#B85C5C',
+    borderRadius: 15,
     alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
   },
 
   saveText: {
     color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+
+  suggestionBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#E1E4E8',
+    overflow: 'hidden',
+  },
+
+  suggestionItem: {
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E8EAED',
+  },
+
+  suggestionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#555D68',
   },
 });

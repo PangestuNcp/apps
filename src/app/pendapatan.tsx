@@ -11,6 +11,7 @@ import {
   ScrollView,
 } from 'react-native';
 
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import db from '../database/database';
 
@@ -52,12 +53,6 @@ export default function PendapatanScreen() {
       return;
     }
 
-    /*
-     * =========================
-     * TIPS
-     * =========================
-     */
-
     if (jenisPendapatan === 'tips') {
       const tanggal = new Date()
         .toISOString()
@@ -65,7 +60,6 @@ export default function PendapatanScreen() {
 
       db.withTransactionSync(() => {
         if (jenisTips === 'tunai') {
-          // Tips tunai masuk ke Cash.
           db.runSync(
             `
             UPDATE saldo
@@ -90,7 +84,6 @@ export default function PendapatanScreen() {
             ]
           );
         } else {
-          // Tips non-tunai masuk ke Dompet Grab.
           db.runSync(
             `
             UPDATE saldo
@@ -139,12 +132,6 @@ export default function PendapatanScreen() {
       return;
     }
 
-    /*
-     * =========================
-     * ORDERAN
-     * =========================
-     */
-
     const nilaiTagihan =
       jenisOrder === 'tunai'
         ? Number(tagihan.replace(/\D/g, ''))
@@ -185,17 +172,6 @@ export default function PendapatanScreen() {
     const tanggal = new Date()
       .toISOString()
       .slice(0, 10);
-
-    /*
-     * =========================
-     * ORDERAN NON-TUNAI
-     * =========================
-     *
-     * Pendapatan/ongkir masuk
-     * ke Dompet Grab.
-     *
-     * Tidak ada uang masuk Cash.
-     */
 
     if (jenisOrder === 'non_tunai') {
       db.withTransactionSync(() => {
@@ -242,27 +218,6 @@ export default function PendapatanScreen() {
       return;
     }
 
-    /*
-     * =========================
-     * ORDERAN TUNAI
-     * =========================
-     *
-     * 1. Pendapatan/ongkir masuk
-     *    ke Dompet Grab.
-     *
-     * 2. Uang yang ditagih
-     *    customer masuk Cash.
-     *
-     * 3. Kredit Grab digunakan
-     *    terlebih dahulu.
-     *
-     * 4. Jika Kredit Grab kurang,
-     *    kekurangan dipotong dari
-     *    Dompet Grab.
-     *
-     * 5. Dompet Grab boleh minus.
-     */
-
     const potongKredit = Math.min(
       data.kredit_grab,
       nilaiTagihan
@@ -272,7 +227,6 @@ export default function PendapatanScreen() {
       nilaiTagihan - potongKredit;
 
     db.withTransactionSync(() => {
-      // Pendapatan/ongkir masuk ke Dompet Grab.
       db.runSync(
         `
         UPDATE saldo
@@ -282,7 +236,6 @@ export default function PendapatanScreen() {
         [nilaiPendapatan]
       );
 
-      // Uang yang ditagih dari customer masuk ke Cash.
       db.runSync(
         `
         UPDATE saldo
@@ -292,7 +245,6 @@ export default function PendapatanScreen() {
         [nilaiTagihan]
       );
 
-      // Kredit Grab digunakan terlebih dahulu.
       if (potongKredit > 0) {
         db.runSync(
           `
@@ -304,8 +256,6 @@ export default function PendapatanScreen() {
         );
       }
 
-      // Kekurangan ditanggung Dompet Grab.
-      // Dompet Grab boleh menjadi minus.
       if (kekurangan > 0) {
         db.runSync(
           `
@@ -324,13 +274,38 @@ export default function PendapatanScreen() {
         VALUES (?, ?, ?, ?, ?)
         `,
         [
-          new Date().toISOString(),
-          'pengeluaran',
-          'kekurangan_tagihan_tunai_grab',
-          'Dompet Grab Topup Kekurangan Tagih Tunai Grab',
-          kekurangan,
+          tanggal,
+          'pendapatan',
+          'orderan_tunai',
+          'Pendapatan Grab - Orderan Tunai',
+          nilaiPendapatan,
         ]
       );
+
+      if (kekurangan > 0) {
+        db.runSync(
+          `
+          INSERT INTO transaksi
+          (
+            tanggal,
+            jenis,
+            subjenis,
+            keterangan,
+            nominal,
+            deskripsi
+          )
+          VALUES (?, ?, ?, ?, ?, ?)
+          `,
+          [
+            tanggal,
+            'pengeluaran',
+            'kekurangan_tagihan_tunai_grab',
+            'Dompet Grab Topup Kekurangan Tagih Tunai Grab',
+            kekurangan,
+            'Topup kekurangan tagih tunai grab',
+          ]
+        );
+      }
     });
 
     setPendapatan('');
@@ -369,10 +344,14 @@ export default function PendapatanScreen() {
     <SafeAreaView style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
+        {/* HEADER */}
         <View style={styles.header}>
           <Pressable
             onPress={() => router.back()}
+            hitSlop={10}
           >
             <Text style={styles.back}>‹</Text>
           </Pressable>
@@ -389,65 +368,79 @@ export default function PendapatanScreen() {
         </View>
 
         {/* JENIS PENDAPATAN */}
+        <View style={styles.section}>
+          <View style={styles.sectionTitleRow}>
+            <Ionicons
+              name="trending-up-outline"
+              size={18}
+              color="#4E8A67"
+            />
 
-        <Text style={styles.label}>
-          Jenis Pendapatan
-        </Text>
+            <Text style={styles.sectionTitle}>
+              Jenis Pendapatan
+            </Text>
+          </View>
 
-        <View style={styles.orderTypeList}>
-          <Pressable
-            style={[
-              styles.orderTypeButton,
-              jenisPendapatan === 'orderan' &&
-                styles.orderTypeSelected,
-            ]}
-            onPress={() =>
-              setJenisPendapatan('orderan')
-            }
-          >
-            <Text
+          <View style={styles.choiceRow}>
+            <Pressable
               style={[
-                styles.orderTypeText,
+                styles.choiceButton,
                 jenisPendapatan === 'orderan' &&
-                  styles.orderTypeTextSelected,
+                  styles.choiceButtonSelected,
               ]}
+              onPress={() =>
+                setJenisPendapatan('orderan')
+              }
             >
-              Orderan
-            </Text>
-          </Pressable>
+              <Text
+                style={[
+                  styles.choiceText,
+                  jenisPendapatan === 'orderan' &&
+                    styles.choiceTextSelected,
+                ]}
+              >
+                Orderan
+              </Text>
+            </Pressable>
 
-          <Pressable
-            style={[
-              styles.orderTypeButton,
-              jenisPendapatan === 'tips' &&
-                styles.orderTypeSelected,
-            ]}
-            onPress={() =>
-              setJenisPendapatan('tips')
-            }
-          >
-            <Text
+            <Pressable
               style={[
-                styles.orderTypeText,
+                styles.choiceButton,
                 jenisPendapatan === 'tips' &&
-                  styles.orderTypeTextSelected,
+                  styles.choiceButtonSelected,
               ]}
+              onPress={() =>
+                setJenisPendapatan('tips')
+              }
             >
-              Tips
-            </Text>
-          </Pressable>
+              <Text
+                style={[
+                  styles.choiceText,
+                  jenisPendapatan === 'tips' &&
+                    styles.choiceTextSelected,
+                ]}
+              >
+                Tips
+              </Text>
+            </Pressable>
+          </View>
         </View>
 
-        {/* ========================= */}
         {/* TIPS */}
-        {/* ========================= */}
-
         {jenisPendapatan === 'tips' ? (
           <>
-            <View style={styles.infoCard}>
-              <Text style={styles.infoTitle}>
-                Pendapatan Tips
-              </Text>
+            <View style={styles.infoBox}>
+              <View style={styles.infoHeader}>
+                <Ionicons
+                  name="information-circle-outline"
+                  size={18}
+                  color="#4E8A67"
+                />
+
+                <Text style={styles.infoTitle}>
+                  Pendapatan Tips
+                </Text>
+              </View>
 
               <Text style={styles.infoText}>
                 Tips tunai masuk ke Cash.
@@ -458,70 +451,84 @@ export default function PendapatanScreen() {
               </Text>
             </View>
 
-            <Text style={styles.label}>
-              Jenis Tips
-            </Text>
+            <View style={styles.section}>
+              <View style={styles.sectionTitleRow}>
+                <Ionicons
+                  name="wallet-outline"
+                  size={18}
+                  color="#4E8A67"
+                />
 
-            <View style={styles.orderTypeList}>
-              <Pressable
-                style={[
-                  styles.orderTypeButton,
-                  jenisTips === 'tunai' &&
-                    styles.orderTypeSelected,
-                ]}
-                onPress={() =>
-                  setJenisTips('tunai')
-                }
-              >
-                <Text
+                <Text style={styles.sectionTitle}>
+                  Jenis Tips
+                </Text>
+              </View>
+
+              <View style={styles.choiceRow}>
+                <Pressable
                   style={[
-                    styles.orderTypeText,
+                    styles.choiceButton,
                     jenisTips === 'tunai' &&
-                      styles.orderTypeTextSelected,
+                      styles.choiceButtonSelected,
                   ]}
+                  onPress={() =>
+                    setJenisTips('tunai')
+                  }
                 >
-                  Tips Tunai
-                </Text>
-              </Pressable>
+                  <Text
+                    style={[
+                      styles.choiceText,
+                      jenisTips === 'tunai' &&
+                        styles.choiceTextSelected,
+                    ]}
+                  >
+                    Tips Tunai
+                  </Text>
+                </Pressable>
 
-              <Pressable
-                style={[
-                  styles.orderTypeButton,
-                  jenisTips === 'non_tunai' &&
-                    styles.orderTypeSelected,
-                ]}
-                onPress={() =>
-                  setJenisTips('non_tunai')
-                }
-              >
-                <Text
+                <Pressable
                   style={[
-                    styles.orderTypeText,
+                    styles.choiceButton,
                     jenisTips === 'non_tunai' &&
-                      styles.orderTypeTextSelected,
+                      styles.choiceButtonSelected,
                   ]}
+                  onPress={() =>
+                    setJenisTips('non_tunai')
+                  }
                 >
-                  Tips Non-Tunai
-                </Text>
-              </Pressable>
+                  <Text
+                    style={[
+                      styles.choiceText,
+                      jenisTips === 'non_tunai' &&
+                        styles.choiceTextSelected,
+                    ]}
+                  >
+                    Tips Non-Tunai
+                  </Text>
+                </Pressable>
+              </View>
             </View>
 
-            <Text style={styles.label}>
-              Nominal Tips
-            </Text>
+            <View style={styles.section}>
+              <Text style={styles.inputLabel}>
+                Nominal Tips
+              </Text>
 
-            <TextInput
-              style={styles.input}
-              placeholder="Contoh: 5000"
-              keyboardType="numeric"
-              value={pendapatan}
-              onChangeText={setPendapatan}
-            />
+              <TextInput
+                style={styles.input}
+                placeholder="Rp5000"
+                placeholderTextColor="#9AA1AC"
+                keyboardType="numeric"
+                value={pendapatan}
+                onChangeText={setPendapatan}
+              />
+            </View>
 
             <Pressable
               style={styles.saveButton}
               onPress={simpan}
             >
+
               <Text style={styles.saveText}>
                 Simpan Tips
               </Text>
@@ -529,62 +536,77 @@ export default function PendapatanScreen() {
           </>
         ) : (
           <>
-            {/* ========================= */}
             {/* ORDERAN */}
-            {/* ========================= */}
+            <View style={styles.section}>
+              <View style={styles.sectionTitleRow}>
+                <Ionicons
+                  name="bicycle-outline"
+                  size={18}
+                  color="#4E8A67"
+                />
 
-            <Text style={styles.label}>
-              Jenis Orderan
-            </Text>
+                <Text style={styles.sectionTitle}>
+                  Jenis Orderan
+                </Text>
+              </View>
 
-            <View style={styles.orderTypeList}>
-              <Pressable
-                style={[
-                  styles.orderTypeButton,
-                  jenisOrder === 'tunai' &&
-                    styles.orderTypeSelected,
-                ]}
-                onPress={() =>
-                  setJenisOrder('tunai')
-                }
-              >
-                <Text
+              <View style={styles.choiceRow}>
+                <Pressable
                   style={[
-                    styles.orderTypeText,
+                    styles.choiceButton,
                     jenisOrder === 'tunai' &&
-                      styles.orderTypeTextSelected,
+                      styles.choiceButtonSelected,
                   ]}
+                  onPress={() =>
+                    setJenisOrder('tunai')
+                  }
                 >
-                  Orderan Tunai
-                </Text>
-              </Pressable>
+                  <Text
+                    style={[
+                      styles.choiceText,
+                      jenisOrder === 'tunai' &&
+                        styles.choiceTextSelected,
+                    ]}
+                  >
+                    Orderan Tunai
+                  </Text>
+                </Pressable>
 
-              <Pressable
-                style={[
-                  styles.orderTypeButton,
-                  jenisOrder === 'non_tunai' &&
-                    styles.orderTypeSelected,
-                ]}
-                onPress={() =>
-                  setJenisOrder('non_tunai')
-                }
-              >
-                <Text
+                <Pressable
                   style={[
-                    styles.orderTypeText,
+                    styles.choiceButton,
                     jenisOrder === 'non_tunai' &&
-                      styles.orderTypeTextSelected,
+                      styles.choiceButtonSelected,
                   ]}
+                  onPress={() =>
+                    setJenisOrder('non_tunai')
+                  }
                 >
-                  Orderan Non-Tunai
-                </Text>
-              </Pressable>
+                  <Text
+                    style={[
+                      styles.choiceText,
+                      jenisOrder === 'non_tunai' &&
+                        styles.choiceTextSelected,
+                    ]}
+                  >
+                    Orderan Non-Tunai
+                  </Text>
+                </Pressable>
+              </View>
             </View>
 
-            <View style={styles.infoCard}>
-              <Text style={styles.infoTitle}>
-                Pendapatan Grab
-              </Text>
+            <View style={styles.infoBox}>
+              <View style={styles.infoHeader}>
+                <Ionicons
+                  name="information-circle-outline"
+                  size={18}
+                  color="#4E8A67"
+                />
+
+                <Text style={styles.infoTitle}>
+                  Pendapatan Grab
+                </Text>
+              </View>
 
               <Text style={styles.infoText}>
                 Semua pendapatan/ongkir masuk ke
@@ -604,38 +626,43 @@ export default function PendapatanScreen() {
               )}
             </View>
 
-            <Text style={styles.label}>
-              Total Pendapatan (Ongkir)
-            </Text>
+            <View style={styles.section}>
+              <Text style={styles.inputLabel}>
+                Total Pendapatan (Ongkir)
+              </Text>
 
-            <TextInput
-              style={styles.input}
-              placeholder="Contoh: 3000"
-              keyboardType="numeric"
-              value={pendapatan}
-              onChangeText={setPendapatan}
-            />
+              <TextInput
+                style={styles.input}
+                placeholder="Rp3000"
+                placeholderTextColor="#9AA1AC"
+                keyboardType="numeric"
+                value={pendapatan}
+                onChangeText={setPendapatan}
+              />
+            </View>
 
             {jenisOrder === 'tunai' && (
-              <>
-                <Text style={styles.label}>
+              <View style={styles.section}>
+                <Text style={styles.inputLabel}>
                   Jumlah Uang yang Harus Ditagih
                 </Text>
 
                 <TextInput
                   style={styles.input}
-                  placeholder="Contoh: 10000"
+                  placeholder="Rp10000"
+                  placeholderTextColor="#9AA1AC"
                   keyboardType="numeric"
                   value={tagihan}
                   onChangeText={setTagihan}
                 />
-              </>
+              </View>
             )}
 
             <Pressable
               style={styles.saveButton}
               onPress={simpan}
             >
+
               <Text style={styles.saveText}>
                 Simpan Pendapatan
               </Text>
@@ -650,7 +677,7 @@ export default function PendapatanScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F7FA',
+    backgroundColor: '#F8F9FB',
   },
 
   content: {
@@ -661,7 +688,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: 24,
   },
 
   back: {
@@ -672,89 +699,124 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontSize: 30,
-    fontWeight: '800',
+    fontSize: 22,
+    fontWeight: '700',
   },
 
   subtitle: {
-    marginTop: 4,
+    marginTop: 2,
     color: '#68707D',
-    fontSize: 14,
+    fontSize: 12,
   },
 
-  label: {
-    marginTop: 8,
-    marginBottom: 8,
+  section: {
+    marginBottom: 18,
+  },
+
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 9,
+  },
+
+  sectionTitle: {
+    marginLeft: 7,
     fontSize: 14,
     fontWeight: '700',
+    color: '#252A31',
   },
 
-  orderTypeList: {
+  choiceRow: {
+    flexDirection: 'row',
     gap: 10,
-    marginBottom: 20,
   },
 
-  orderTypeButton: {
+  choiceButton: {
+    flex: 1,
+    minHeight: 46,
     backgroundColor: '#FFFFFF',
-    padding: 16,
-    borderRadius: 15,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#E1E4E8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
   },
 
-  orderTypeSelected: {
-    backgroundColor: '#222',
-    borderColor: '#222',
+  choiceButtonSelected: {
+    backgroundColor: '#EAF5EE',
+    borderColor: '#BBDCC8',
   },
 
-  orderTypeText: {
-    fontSize: 15,
+  choiceText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#555D68',
+    textAlign: 'center',
+  },
+
+  choiceTextSelected: {
+    color: '#4E8A67',
     fontWeight: '700',
   },
 
-  orderTypeTextSelected: {
-    color: '#FFFFFF',
+  infoBox: {
+    backgroundColor: '#F0F8F3',
+    borderRadius: 15,
+    padding: 15,
+    marginBottom: 18,
   },
 
-  infoCard: {
-    backgroundColor: '#EAF2FF',
-    borderRadius: 15,
-    padding: 16,
-    marginBottom: 20,
+  infoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 7,
   },
 
   infoTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    marginBottom: 8,
+    marginLeft: 7,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#416D53',
   },
 
   infoText: {
-    fontSize: 14,
-    lineHeight: 21,
-    color: '#444',
-    marginBottom: 4,
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#66706A',
+    marginBottom: 3,
+  },
+
+  inputLabel: {
+    marginBottom: 7,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#555D68',
   },
 
   input: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 15,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    backgroundColor: '#F1F3F5',
+    borderRadius: 12,
+    paddingHorizontal: 15,
+    paddingVertical: 13,
     fontSize: 16,
-    marginBottom: 20,
+    color: '#252A31',
   },
 
   saveButton: {
-    backgroundColor: '#222',
-    borderRadius: 16,
-    paddingVertical: 16,
+    minHeight: 50,
+    backgroundColor: '#4E8A67',
+    borderRadius: 15,
     alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 7,
+    marginTop: 2,
   },
 
   saveText: {
     color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 15,
+    fontWeight: '700',
   },
 });
